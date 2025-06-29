@@ -1,0 +1,7 @@
+[project]
+name = "garry-coin"
+version = "0.1.0"
+description = "GarryCoin is a project centered around the community of GarryCoin."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
