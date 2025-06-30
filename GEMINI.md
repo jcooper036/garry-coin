@@ -6,6 +6,8 @@
 - Always read @README.md and consider what you are doing in the scope of the prpoject.
 - Always read @DESIGN.md for technical guidance.
 - Keep these documents up to date for major project decisions and technical decisions.
+- Always read MEMORY.md, which is a summary of previous things we have worked on.
+- If asked to dump your memory, condense the memory of the current coversation and add the summary to MEMORY.md, with the section header as the date and time, following the example there.
 
 # sacred - do not touch these files unless explicitly instructed to do so
 - docker-compose.yml
