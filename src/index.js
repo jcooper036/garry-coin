@@ -26,7 +26,12 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
   }
 
   if (type === InteractionType.APPLICATION_COMMAND) {
-    const { name } = data;
+    const { name, options } = data;
+    const { user } = req.body.member;
+    const { channel_id, guild_id, channel } = req.body;
+    console.log(`Command received: ${name}`);
+    console.log(`User: ${user.id} (${user.username}) (${user.global_name})`);
+    console.log(`Channel: ${channel_id} (${channel.name}) Guild:${guild_id}`);
 
     if (name === 'test') {
       return res.send({
@@ -40,7 +45,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
     if (commands.has(name)) {
       const command = commands.get(name);
-      const response = command.execute();
+      const response = command.execute(req.body);
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {

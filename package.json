@@ -6,7 +6,8 @@
   "scripts": {
     "start": "nodemon src/index.js",
     "start:prod": "node src/index.js",
-    "register": "node src/register-commands.js"
+    "register": "node src/register-commands.js",
+    "grant_gc": "node src/grant_gc.js"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
