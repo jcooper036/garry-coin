@@ -1,0 +1,45 @@
+version: '3.8'
+services:
+  bot:
+    build: .
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - APP_ID=${APP_ID}
+      - GUILD_ID=${GUILD_ID}
+      - PUBLIC_KEY=${PUBLIC_KEY}
+      - PORT=${PORT}
+    restart: always
+    ports:
+      - "${PORT}:${PORT}"
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    # uses variables defined in .env
+    command:
+      - "http"
+      - "http://host.docker.internal:${PORT}"
+      - "--url"
+      - "${NGROK_ADDRESS}"
+    depends_on:
+      - bot # start after the bot
+    ports:
+      - 4040:4040
+
+volumes:
+  postgres-data:

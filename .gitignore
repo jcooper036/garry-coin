@@ -1,2 +1,10 @@
+# JS ignore
+node_modules/
+dist/
+build/
+out/
+.next/ (for Next.js projects)
+
 # config
 .env
+

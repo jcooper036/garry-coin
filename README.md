@@ -33,12 +33,26 @@ Unless stated otherwise, all responses are private to the user.
 - **Leaderboards:** A server-wide or global leaderboard of the richest users.
 - **Shop:** A server-specific "shop" where users can spend coins on cosmetic roles or other server perks defined by the server admins.
 
-## Running locally
-Following the discord getting started
+## Development
+If all is working, you should be able to go to discord and run the /test command for the bot on any server it's deployed on.
+### Deploying the bot
+[Bot configuration page](https://discord.com/developers/applications/929770806697918524/information)
+
+Follow the instructions in the [getting started docs from discord](https://discord.com/developers/docs/quick-start/getting-started). We're using a stable ngrok endpoint for the interactions endpoint, so that shouldn't need to change.
+
+### Running Locally
+#### Docker compose
+Try this before anything else:
+```bash
+docker compose build
+docker compose up
+```
+### all manual like
+Only do this if for some reason you need to disect the docker services. If you need to dig into the individual services, start the app:
 ```bash
 npm run start
 ```
 followed by using ngrok to connect to expose the bot to the internet
 ```bash
-ngrok http 3000
+ngrok http 3000 --url $NGROK_ADDRESS
 ```

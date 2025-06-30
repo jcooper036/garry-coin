@@ -1,0 +1,17 @@
+{
+  "name": "garry-coin",
+  "version": "1.0.0",
+  "description": "GarryCoin Discord Bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/register-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2",
+    "discord-interactions": "^3.4.0"
+  }
+}
