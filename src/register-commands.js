@@ -1,12 +1,6 @@
 require('dotenv').config();
 const { REST, Routes } = require('discord.js');
-
-const commands = [
-  {
-    name: 'test',
-    description: 'Should return "Hello from the GarryCoin community"'
-  },
-];
+const commands = require('./command_definitions.js');
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
@@ -15,7 +9,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     console.log('Started refreshing application (/) commands.');
 
     await rest.put(
-      Routes.applicationGuildCommands(process.env.APP_ID, process.env.GUILD_ID),
+      Routes.applicationCommands(process.env.APP_ID),
       { body: commands },
     );
 
