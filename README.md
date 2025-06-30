@@ -19,6 +19,7 @@ The primary way of giving GarryCoin is with emoji responses to messages. There a
 
 ### Slash Commands
 Unless stated otherwise, all responses are private to the user.
+- `/test` - Should return "Hello from the GarryCoin community"
 - `/garryhelp` - Gives the user the commands they can use.
 - `/garrywallet` - Displays the current contents of a user's wallet privately.
 - `/garrylookatme` - Displays the current contents of a user's wallet publicly.
@@ -31,3 +32,13 @@ Unless stated otherwise, all responses are private to the user.
 - **Gambling:** Add mini-games (like dice rolls or coin flips) where users can gamble their GarryCoins.
 - **Leaderboards:** A server-wide or global leaderboard of the richest users.
 - **Shop:** A server-specific "shop" where users can spend coins on cosmetic roles or other server perks defined by the server admins.
+
+## Running locally
+Following the discord getting started
+```bash
+npm run start
+```
+followed by using ngrok to connect to expose the bot to the internet
+```bash
+ngrok http 3000
+```

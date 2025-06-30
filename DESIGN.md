@@ -4,7 +4,7 @@ This document outlines the technical design, hosting, and deployment strategy fo
 
 ## 1. Technology Stack
 
-- **Language/Framework**: Use python and the discord provided python SDK
+- **Language/Framework**: Make a JavaScript application
 - **Database**: PostgreSQL for persistent data storage (user wallets, transaction history).
 - **Containerization**: Docker and Docker Compose.
 
@@ -26,6 +26,8 @@ A `docker-compose.yml` file at the root of the project will define two main serv
     *   Uses the official `postgres` Docker image.
     *   A Docker volume will be used to persist the database data on the host machine, so data is not lost when the container is stopped or restarted.
     *   Database credentials (username, password) will be configured via environment variables.
+
+3.  Use ngrok to expose the bot by adding a service that can do the equvalient of docker run -it -e NGROK_AUTHTOKEN=$NGROK_AUTHTOKEN ngrok/ngrok http 80 --url=$NGROK_URL
 
 ### Workflow
 
