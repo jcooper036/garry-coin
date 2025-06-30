@@ -18,15 +18,14 @@ The primary way of giving GarryCoin is with emoji responses to messages. There a
 **Important:** Emojis can be taken back on Discord, but the GarryCoin transaction is final and cannot be undone. Removing the emoji does not un-send the GarryCoins. Removing the emoji and then using it again will send more GarryCoins.
 
 ### Slash Commands
-Unless stated otherwise, all responses are private to the user.
-- `/test` - Should return "Hello from the GarryCoin community"
-- `/garryhelp` - Gives the user the commands they can use.
-- `/garrywallet` - Displays the current contents of a user's wallet privately.
-- `/garrylookatme` - Displays the current contents of a user's wallet publicly.
-- `/garrymakeitrain` - Gives one GarryCoin to every other member of the server. (Secret feature: If the user doesn't have enough coins, it mocks them publicly for being too poor).
-- `/garryhistory` - Shows the last 10 transactions from the user.
-- `/garryreceipt @user` - Shows the last 10 transactions of a specific user (available to all users on the channel).
-- `/garrysend X @user` - Sends X GarryCoins to the target user publicly.
+Unless stated otherwise, all responses are private to the user. "ephemeral" vs "public" denotes if the interaction in the channel can be seen only by the user that called the action, or if the bot posts publically to the channel.
+- `/test` - (ephemeral) Should return "Hello from the GarryCoin community"
+- `/garryhelp` - (ephemeral) Gives the user the commands they can use.
+- `/garrywallet` - (ephemeral) Displays the current contents of a user's wallet privately.
+- `/garrylookatme` - (public) Displays the current contents of a user's wallet publicly.
+- `/garrymakeitrain` - (public) Gives one GarryCoin to every other member of the server. (Secret feature: If the user doesn't have enough coins, it mocks them publicly for being too poor).
+- `/garryhistory @user` - (public) Shows the last 10 transactions for the stated user. By default this is the user making the request.
+- `/garrysend X @user` - (public) Sends X GarryCoins to the target user publicly.
 
 ## Future Ideas
 - **Gambling:** Add mini-games (like dice rolls or coin flips) where users can gamble their GarryCoins.

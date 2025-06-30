@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
-const { InteractionType, InteractionResponseType } = require('discord-interactions');
+const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +23,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
           content: 'Hello from the GarryCoin community',
+          flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
     }
