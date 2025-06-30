@@ -29,3 +29,9 @@
 I changed the format of the TODO.md file, specifically the sections and instructions.
 ### what to do instead
 Only add or remove issues/features from TODO.md. Do not modify the existing instructions or sections.
+
+## MEMORY.md Appending
+### What I did wrong
+I overwrote the MEMORY.md file instead of appending new session summaries to it.
+### what to do instead
+Always append new session summaries to MEMORY.md. Never overwrite the file.

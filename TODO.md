@@ -5,5 +5,4 @@ Add issues and features to track for developemnt. Use markdown formatting to gro
 # Issues
 
 # Features
-* Implement database logic for grant_gc.js
-* Implement database logic to fetch user balance in garrywallet.js
+* Implement generic user existence check and creation in `src/index.js`.
