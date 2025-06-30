@@ -11,9 +11,12 @@ services:
       - GUILD_ID=${GUILD_ID}
       - PUBLIC_KEY=${PUBLIC_KEY}
       - PORT=${PORT}
-    restart: always
+    volumes:
+      - ./src:/usr/src/app/src
+    restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
+    command: npm run start
 
   db:
     image: postgres:13

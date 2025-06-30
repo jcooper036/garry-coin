@@ -41,18 +41,13 @@ If all is working, you should be able to go to discord and run the /test command
 Follow the instructions in the [getting started docs from discord](https://discord.com/developers/docs/quick-start/getting-started). We're using a stable ngrok endpoint for the interactions endpoint, so that shouldn't need to change.
 
 ### Running Locally
-#### Docker compose
-Try this before anything else:
+
+To run the bot locally with Docker Compose:
+
 ```bash
-docker compose build
-docker compose up
+docker compose up --build
 ```
-### all manual like
-Only do this if for some reason you need to disect the docker services. If you need to dig into the individual services, start the app:
-```bash
-npm run start
-```
-followed by using ngrok to connect to expose the bot to the internet
-```bash
-ngrok http 3000 --url $NGROK_ADDRESS
-```
+
+This will start the bot, a local PostgreSQL database, and an ngrok tunnel. Changes made to files within the `src/` directory will automatically trigger a rebuild and restart of the bot container. For changes outside of `src/` (e.g., `package.json`, `Dockerfile`), you will need to run `docker compose build` followed by `docker compose up`.
+
+### Environment Variables
