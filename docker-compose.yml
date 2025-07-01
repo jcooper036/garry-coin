@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  bot:
+  api:
     build: .
     depends_on:
       - db
@@ -22,7 +22,25 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
-    command: npm run start
+    command: npm run start-api
+
+  emoji-bot:
+    build: .
+    depends_on:
+      - db
+      - migrations
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+    volumes:
+      - ./src:/usr/src/app/src
+    restart: unless-stopped
+    command: npm run start-bot
 
   migrations:
     build: .
@@ -63,7 +81,7 @@ services:
       - "--url"
       - "${NGROK_ADDRESS}"
     depends_on:
-      - bot # start after the bot
+      - api # start after the api
     ports:
       - 4040:4040
 

@@ -34,7 +34,7 @@ Only add or remove issues/features from TODO.md. Do not modify the existing inst
 ### What I did wrong
 I overwrote the MEMORY.md file instead of appending new session summaries to it.
 ### what to do instead
-Always append new session summaries to MEMORY.md. Never overwrite the file.
+Always append new session summaries to MEMORY.md. Never remove contents from that file.
 
 ## Assiming docker is not running
 ### What I did wrong

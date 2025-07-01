@@ -4,14 +4,14 @@
   "description": "GarryCoin Discord Bot",
   "main": "src/index.js",
   "scripts": {
-    "start": "nodemon src/index.js",
-    "start:prod": "node src/index.js",
+    "start-api": "node src/index.js",
+    "start-bot": "node src/bot.js",
     "register": "node src/register-commands.js",
     "grant_gc": "node src/grant_gc.js"
   },
   "dependencies": {
     "discord-interactions": "^3.4.0",
-    "discord.js": "^14.15.3",
+    "discord.js": "^14.21.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "knex": "^3.1.0",
