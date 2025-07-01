@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { transfer } = require('./db');
+const { transfer, grant } = require('./db');
 
 const client = new Client({
   intents: [
@@ -8,6 +8,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -50,7 +51,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     }
 
     console.log(`Attempting to transfer ${amount} from ${senderId} to ${receiverId} via emoji.`);
-    const result = await transfer(senderId, receiverId, amount);
+    const result = await transfer(senderId, receiverId, amount, 'user_to_user_emoji');
 
     if (result.success) {
       console.log(`Successfully transferred ${amount} GarryCoin from ${senderId} to ${receiverId}.`);
@@ -64,3 +65,41 @@ client.on('messageReactionAdd', async (reaction, user) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
+// Cooldown logic
+let lastGrantedTime = 0;
+const COOLDOWN_PERIOD = 60 * 1000; // 1 minute
+
+client.on('messageCreate', async message => {
+  if (message.author.bot) {
+    console.log("No granting for bot")
+    return;
+  };
+
+  const now = Date.now();
+  if (now - lastGrantedTime < COOLDOWN_PERIOD) {
+    console.log("Coin granting on cooldown")
+    return;
+  }
+
+  try {
+    const guild = message.guild;
+    if (!guild) return;
+
+    const members = await guild.members.fetch();
+    const randomMember = members.random();
+
+    if (randomMember) {
+      lastGrantedTime = now;
+      const result = await grant(randomMember.id, 1, 'lottery_grant');
+      if (result.success) {
+        console.log(`Successfully granted 1 GarryCoin to ${randomMember.user.tag}.`);
+      } else {
+        console.error(`Failed to grant GarryCoin to ${randomMember.user.tag}: ${result.message}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error granting random GarryCoin:', error);
+  }
+});
+

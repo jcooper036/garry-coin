@@ -26,7 +26,7 @@ module.exports = {
       return { content: 'You cannot send GarryCoins to yourself.', ephemeral: true };
     }
 
-    const result = await transfer(senderId, receiverId, amount);
+    const result = await transfer(senderId, receiverId, amount, 'user_to_user_send');
 
     if (result.success) {
       return { content: `Successfully sent ${amount} GarryCoins to <@${receiverId}>.`, ephemeral: true };

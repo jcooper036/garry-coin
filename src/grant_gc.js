@@ -1,4 +1,4 @@
-const { db, findOrCreateUser } = require('./db');
+const { grant, db } = require('./db');
 
 const [userId, amount] = process.argv.slice(2);
 
@@ -15,11 +15,13 @@ async function grantGarryCoin() {
       process.exit(1);
     }
 
-    const user = await findOrCreateUser(userId);
+    const result = await grant(userId, parsedAmount, 'house_grant');
 
-    await db('users').where({ user_id: userId }).increment('balance', parsedAmount);
-
-    console.log(`Granting ${parsedAmount} GarryCoin to user ${userId} successful. New balance: ${user.balance + parsedAmount}`);
+    if (result.success) {
+      console.log(`Successfully granted ${parsedAmount} GarryCoin to user ${userId}.`);
+    } else {
+      console.error(`Failed to grant GarryCoin to user ${userId}: ${result.message}`);
+    }
   } catch (error) {
     console.error(`Error granting GarryCoin to user ${userId}:`, error);
     process.exit(1);

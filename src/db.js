@@ -13,7 +13,7 @@ async function findOrCreateUser(userId) {
   return user;
 }
 
-async function transfer(senderId, receiverId, amount) {
+async function transfer(senderId, receiverId, amount, transaction_type) {
   if (amount <= 0) {
     return { success: false, message: 'Amount must be positive.' };
   }
@@ -29,17 +29,28 @@ async function transfer(senderId, receiverId, amount) {
     await trx('users').where({ user_id: senderId }).decrement('balance', amount);
     await trx('users').where({ user_id: receiverId }).increment('balance', amount);
 
-    await recordTransaction(senderId, receiverId, amount, trx);
+    await recordTransaction(senderId, receiverId, amount, transaction_type, trx);
 
     return { success: true, message: 'Transfer successful.' };
   });
 }
 
-async function recordTransaction(sending_user_id, receiving_user_id, amount, trx) {
+async function recordTransaction(sending_user_id, receiving_user_id, amount, transaction_type, trx) {
   await (trx || db)('transactions').insert({
     sending_user_id,
     receiving_user_id,
     amount,
+    transaction_type,
+  });
+}
+
+async function grant(receiverId, amount, transaction_type) {
+  return db.transaction(async trx => {
+    await findOrCreateUser(receiverId);
+    await trx('users').where({ user_id: receiverId }).increment('balance', amount);
+    const senderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
+    await recordTransaction(senderId, receiverId, amount, transaction_type, trx);
+    return { success: true, message: 'Grant successful.' };
   });
 }
 
@@ -48,4 +59,5 @@ module.exports = {
   findOrCreateUser,
   transfer,
   recordTransaction,
+  grant,
 };
