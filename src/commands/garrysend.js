@@ -21,7 +21,7 @@ module.exports = {
     const senderId = interaction.member.user.id;
     const receiverId = interaction.data.options.find(opt => opt.name === 'target_user').value;
     const amount = interaction.data.options.find(opt => opt.name === 'amount').value;
-
+    console.log(`senderId:${senderId},recieverId:${receiverId},amount${amount}`);
     if (senderId === receiverId) {
       return { content: 'You cannot send GarryCoins to yourself.', ephemeral: true };
     }

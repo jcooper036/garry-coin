@@ -7,7 +7,7 @@ const db = knex(knexConfig[environment]);
 async function findOrCreateUser(userId) {
   let user = await db('users').where({ user_id: userId }).first();
   if (!user) {
-    user = { discord_id: userId, balance: 0 };
+    user = { user_id: userId, balance: 0 };
     await db('users').insert(user);
   }
   return user;
