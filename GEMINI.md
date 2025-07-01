@@ -35,3 +35,20 @@ Only add or remove issues/features from TODO.md. Do not modify the existing inst
 I overwrote the MEMORY.md file instead of appending new session summaries to it.
 ### what to do instead
 Always append new session summaries to MEMORY.md. Never overwrite the file.
+
+## Assiming docker is not running
+### What I did wrong
+Made assumptions about the cause of an error (e.g., Docker not running) without sufficient evidence.
+### What to do instead
+Always verify assumptions with concrete evidence (e.g., by checking logs, file contents, or running commands) before making statements or taking action. Use `docker ps` to check on the running containers. Remember that we are using nodemon, so we are getting hot reloading of containers after changes to /src.
+
+## Confidently wrong about code existence
+### What I did wrong
+When troubleshooting, stated that a line of code was present in a file without verifying its existence.
+### What to do instead
+When troubleshooting, before stating that a specific line of code or file content exists, use `read_file` or `read_many_files` to confirm its presence and exact content. This is because the reason there is a bug is that the code might not exist, i.e. that there was a failure of a tool to write the code (I thought I wrote it, but it did not save).
+
+## mismatching db write calls with the schema
+Did not thoroughly check the database schema (migration files) before writing code that interacts with the database, leading to a column name mismatch.
+### What to do instead
+When interacting with a database, always consult the relevant migration files or schema definitions to ensure correct column names and data structures are used. If there's any doubt, read the migration files first. Refrain from changing the databse unless explicity told to do so - change functions that interact with the database to match the database instead.

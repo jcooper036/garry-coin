@@ -29,7 +29,21 @@ const commands = [
   },
   {
     name: 'garrysend',
-    description: 'Sends X GarryCoins to the target user publicly.'
+    description: 'Sends GarryCoins to another user.',
+    options: [
+      {
+        name: 'target_user',
+        description: 'The user to send GarryCoins to.',
+        type: 6, // USER type
+        required: true,
+      },
+      {
+        name: 'amount',
+        description: 'The amount of GarryCoins to send.',
+        type: 4, // INTEGER type
+        required: true,
+      },
+    ],
   },
 ];
 

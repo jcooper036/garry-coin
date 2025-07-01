@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
+const { db, findOrCreateUser } = require('./db');
 const fs = require('fs');
 const path = require('path');
 
@@ -34,13 +35,8 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     console.log(`Channel: ${channel_id} (${channel.name}) Guild:${guild_id}`);
 
     // Ensure user exists in the database
-    const db = require('./db');
     try {
-      const existingUser = await db.raw('SELECT user_id FROM users WHERE user_id = ?', [user.id]);
-      if (existingUser.rows.length === 0) {
-        await db.raw('INSERT INTO users (user_id, balance) VALUES (?, ?)', [user.id, 0]);
-        console.log(`New user ${user.id} added to the database.`);
-      }
+      await findOrCreateUser(user.id);
     } catch (error) {
       console.error(`Error checking/adding user ${user.id} to database:`, error);
       return res.send({

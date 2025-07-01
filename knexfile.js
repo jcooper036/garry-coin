@@ -6,9 +6,9 @@ module.exports = {
     connection: {
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER || 'garrycoin_user',
-      password: process.env.DB_PASSWORD || 'garrycoin_password',
-      database: process.env.DB_NAME || 'garrycoin_db',
+      user: process.env.POSTGRES_USER || 'garrycoin_user',
+      password: process.env.POSTGRES_PASSWORD || 'garrycoin_password',
+      database: process.env.POSTGRES_DB || 'garrycoin_db',
     },
     migrations: {
       directory: './db/migrations',
