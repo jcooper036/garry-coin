@@ -96,3 +96,27 @@ This session focused on implementing the remaining slash commands and troublesho
     - Guided the user through checking contexts (`docker context ls`), switching to the correct context (`docker context use default`), and ultimately restarting Docker Desktop, which resolved the problem.
 - **Docker Cleanup**:
     - Explained how to use `docker-compose down` with flags like `--volumes` and `--rmi all` to completely remove containers, networks, and optionally volumes and images for a clean rebuild.
+    
+# 2025-07-02 Session Summary (Deployment to Render)
+
+This session focused on deploying the GarryCoin bot to Render, establishing a CI/CD pipeline with GitHub, and resolving deployment-related issues.
+
+- **Deployment Strategy**: Decided to use Render for deployment due to its free tier, Docker-native support, and integrated CI/CD with GitHub, despite initial considerations for other platforms like Railway.
+- **GitHub Repository Setup**:
+    - Created a new GitHub repository and pushed existing local code.
+    - Resolved `unrelated histories` during the initial push by using `git pull origin trunk --allow-unrelated-histories`.
+    - Switched the remote origin to use SSH (`git@github.com:...`) to address authentication issues during `git push`.
+- **Render Service Setup**:
+    - Created a PostgreSQL database on Render (`garrycoin_db`).
+    - Configured the `garrycoin-api` (Web Service) and `garrycoin-emoji-bot` (Background Worker) services on Render.
+    - Adjusted `Dockerfile` and `package.json` to integrate `knex migrate:latest` directly into the `start-api` and `start-bot` scripts (`migrate-and-start-api`, `migrate-and-start-bot`) to work around Render's free-tier limitations on "Build Commands" and "Pre-Deploy Commands".
+- **Troubleshooting Render Deployment**:
+    - **`ECONNREFUSED` Error**: Resolved by updating `knexfile.js` to use `process.env.DATABASE_URL` for the `production` environment and ensuring `NODE_ENV=production` was set on Render.
+    - **`self-signed certificate` Error**: Fixed by adding `ssl: { rejectUnauthorized: false }` to the Knex production connection in `knexfile.js`.
+    - **Render Health Check Failure**: Addressed by adding a `GET /` endpoint to `src/index.js` to satisfy Render's health check.
+- **Discord Interaction Endpoint Update**: Updated the "Interactions Endpoint URL" in the Discord Developer Portal to the Render service URL (`https://garrycoin-api.onrender.com/interactions`).
+- **`/garrymakeitrain` Command Fix**:
+    - Resolved `TypeError: Cannot read properties of undefined (reading 'members')` in `src/commands/garrymakeitrain.js`.
+    - Modified `garrymakeitrain.js` to correctly fetch guild members using the `client` object.
+    - Updated `src/index.js` to create a `discord.js` `Client` instance and pass it to the command's `execute` function.
+- **TODO.md Update**: Added "Set up a proper testing bot" to `TODO.md`.
