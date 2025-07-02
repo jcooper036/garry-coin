@@ -1,41 +1,34 @@
-const { transfer } = require('../../src/db');
+const { findOrCreateUser, transfer } = require('../db');
 
 module.exports = {
   name: 'garrysend',
-  description: 'Sends GarryCoins to another user.',
-  options: [
-    {
-      name: 'target_user',
-      description: 'The user to send GarryCoins to.',
-      type: 6, // USER type
-      required: true,
-    },
-    {
-      name: 'amount',
-      description: 'The amount of GarryCoins to send.',
-      type: 4, // INTEGER type
-      required: true,
-    },
-  ],
-  execute: async (interaction) => {
+  async execute(interaction) {
     const senderId = interaction.member.user.id;
-    const receiverId = interaction.data.options.find(opt => opt.name === 'target_user').value;
-    const amount = interaction.data.options.find(opt => opt.name === 'amount').value;
-    console.log(`senderId:${senderId},recieverId:${receiverId},amount${amount}`);
+    const receiverId = interaction.data.options[0].value;
+    const amount = interaction.data.options[1].value;
+
     if (senderId === receiverId) {
-      return { content: 'You cannot send GarryCoins to yourself.', ephemeral: true };
+      return {
+        content: 'You cannot send GarryCoin to yourself.',
+        ephemeral: true,
+      };
     }
 
-    const result = await transfer(senderId, receiverId, amount, 'user_to_user_send');
+    await findOrCreateUser(senderId);
+    await findOrCreateUser(receiverId);
+
+    const result = await transfer(senderId, receiverId, amount, 'user_to_user_slash_command');
 
     if (result.success) {
-      return { content: `Successfully sent ${amount} GarryCoins to <@${receiverId}>.`, ephemeral: true };
+      return {
+        content: `Successfully sent ${amount} GarryCoin to <@${receiverId}>.`,
+        ephemeral: true,
+      };
     } else {
-      if (result.message === 'insufficient_funds') {
-        return { content: 'You do not have enough GarryCoins to make this transfer.', ephemeral: true };
-      } else {
-        return { content: `Transfer failed: ${result.message}`, ephemeral: true };
-      }
+      return {
+        content: `Failed to send GarryCoin: ${result.message}`,
+        ephemeral: true,
+      };
     }
   },
 };

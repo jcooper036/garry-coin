@@ -5,4 +5,3 @@ Add issues and features to track for developemnt. Use markdown formatting to gro
 # Issues
 
 # Features
-* Implement generic user existence check and creation in `src/index.js`.

@@ -1,7 +1,34 @@
+const { db, findOrCreateUser, transfer } = require('../db');
+
 module.exports = {
   name: 'garrymakeitrain',
-  description: 'Gives one GarryCoin to every other member of the server.',
-  execute: () => {
-    return { content: 'This command will distribute GarryCoins to other server members.', ephemeral: false };
+  async execute(interaction) {
+    const senderId = interaction.member.user.id;
+    const guild = interaction.member.guild;
+    const members = await guild.members.fetch();
+    const sender = await findOrCreateUser(senderId);
+
+    if (!sender || sender.balance < members.size - 1) {
+      return {
+        content: 'You do not have enough GarryCoin to make it rain on everyone in the server.',
+        ephemeral: true,
+      };
+    }
+
+    let successCount = 0;
+    for (const member of members.values()) {
+      if (member.user.bot || member.user.id === senderId) continue;
+
+      await findOrCreateUser(member.user.id);
+      const result = await transfer(senderId, member.user.id, 1, 'user_to_user_make_it_rain');
+      if (result.success) {
+        successCount++;
+      }
+    }
+
+    return {
+      content: `You have made it rain on ${successCount} members of the server!`,
+      ephemeral: false,
+    };
   },
 };

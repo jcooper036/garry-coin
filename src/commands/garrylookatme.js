@@ -1,17 +1,15 @@
-const { findOrCreateUser } = require('../db');
+const { db, findOrCreateUser } = require('../db');
 
 module.exports = {
   name: 'garrylookatme',
-  description: 'Displays the current contents of a user\'s wallet publicly.',
-  execute: async (interaction) => {
+  async execute(interaction) {
     const userId = interaction.member.user.id;
+    const user = await findOrCreateUser(userId);
+    const balance = user ? user.balance : 0;
 
-    try {
-      const user = await findOrCreateUser(userId);
-      return { content: `<@${userId}> has ${user.balance} GarryCoin.`, ephemeral: false };
-    } catch (error) {
-      console.error(`Error fetching wallet for user ${userId}:`, error);
-      return { content: 'An error occurred while fetching your wallet. Please try again later.', ephemeral: true };
-    }
+    return {
+      content: `Your wallet balance is ${balance} GarryCoin.`,
+      ephemeral: false,
+    };
   },
 };

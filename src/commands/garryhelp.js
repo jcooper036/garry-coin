@@ -1,13 +1,19 @@
-const allCommands = require('../command_definitions.js');
+const commands = require('../command_definitions');
 
 module.exports = {
   name: 'garryhelp',
-  description: 'Gives the user the commands they can use.',
-  execute: () => {
-    let helpMessage = 'Here are the available GarryCoin commands:\n\n';
-    allCommands.forEach(command => {
-      helpMessage += `**/${command.name}**: ${command.description}\n`;
-    });
-    return { content: helpMessage, ephemeral: true };
+  async execute(interaction) {
+    const helpMessage = commands.map(command => {
+      let options = '';
+      if (command.options) {
+        options = command.options.map(option => `[${option.name}]`).join(' ');
+      }
+      return `**/${command.name}** ${options} - ${command.description}`;
+    }).join('\n');
+
+    return {
+      content: helpMessage,
+      ephemeral: true,
+    };
   },
 };

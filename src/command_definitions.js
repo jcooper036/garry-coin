@@ -25,7 +25,15 @@ const commands = [
   },
   {
     name: 'garryreceipt',
-    description: 'Shows the last 10 transactions of a specific user.'
+    description: 'Shows the last 10 transactions of a specific user.',
+    options: [
+      {
+        name: 'user',
+        description: 'The user to view the transaction history of.',
+        type: 6, // USER type
+        required: true,
+      },
+    ],
   },
   {
     name: 'garrysend',
