@@ -5,3 +5,4 @@ Add issues and features to track for developemnt. Use markdown formatting to gro
 # Issues
 
 # Features
+- Set up a proper testing bot.
