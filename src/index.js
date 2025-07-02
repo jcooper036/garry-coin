@@ -19,6 +19,10 @@ for (const file of commandFiles) {
   commands.set(command.name, command);
 }
 
+app.get('/', (req, res) => {
+  res.sendStatus(200);
+});
+
 app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
   const { type, id, data } = req.body;
 
