@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { db, findOrCreateUser } = require('./db');
 const fs = require('fs');
 const path = require('path');
@@ -10,6 +11,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const PUBLIC_KEY = process.env.PUBLIC_KEY;
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+
+client.login(process.env.DISCORD_TOKEN);
 
 const commands = new Map();
 const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
@@ -64,7 +69,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
     if (commands.has(name)) {
       const command = commands.get(name);
-      const response = await command.execute(req.body);
+      const response = await command.execute(req.body, client);
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
