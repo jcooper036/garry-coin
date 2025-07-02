@@ -8,6 +8,4 @@ RUN npm install
 
 COPY . .
 
-RUN node src/register-commands.js
-
-CMD ["npm", "run", "start"]
+CMD ["npm", "run", "migrate-and-start-api"]
