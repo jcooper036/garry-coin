@@ -34,8 +34,11 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 
 ## Development
 If all is working, you should be able to go to discord and run the /test command for the bot on any server it's deployed on.
+
+There is both the prod bot (garrycoin_bot) and the test bot (test-garrycoin_bot). Obviously one of those is used for testing, the other is the real thing. Their configurations are managed via the discord web UI.
 ### Deploying the bot
 [Bot configuration page](https://discord.com/developers/applications/929770806697918524/information)
+[Test bot configuration page](https://discord.com/developers/applications/1390674844160491640/information)
 
 Follow the instructions in the [getting started docs from discord](https://discord.com/developers/docs/quick-start/getting-started). We're using a stable ngrok endpoint for the interactions endpoint, so that shouldn't need to change.
 
@@ -49,4 +52,8 @@ docker compose up --build
 
 This will start the bot, a local PostgreSQL database, and an ngrok tunnel. Changes made to files within the `src/` directory will automatically trigger a rebuild and restart of the bot container. For changes outside of `src/` (e.g., `package.json`, `Dockerfile`), you will need to run `docker compose build` followed by `docker compose up`.
 
-### Environment Variables
+## Render
+In prod we use [Render](https://dashboard.render.com/project/prj-d1ipq7mr433s73ckaq50). This means a few things:
+- our .env variables locally point to the test bot. In prod, we store the ENV variables using RENDER. Any that are in .env that say PROD don't actually impact the prod ENV variables.
+- Render hosts the postgres db
+- Render starts the api with `npm run migrate-and-start-api` and the bot with `npm run migrate-and-start-bot`. That's a bit different than our local docker-compose, but the intention is that they remain functionally the same.

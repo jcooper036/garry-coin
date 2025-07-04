@@ -6,10 +6,9 @@ module.exports = {
     const userId = interaction.member.user.id;
     const user = await findOrCreateUser(userId);
     const balance = user ? user.balance : 0;
-    const displayName = interaction.member.displayName;
 
     return {
-      content: `You have ${balance} GarryCoin in you wallet.`,
+      content: `${interaction.member.user.global_name} has ${balance} GarryCoin in their wallet.`,
       ephemeral: false,
     };
   },

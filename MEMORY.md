@@ -48,7 +48,7 @@ This session focused on implementing coin transfer functionality, including both
     - Created `src/bot.js` to act as a separate Discord client, listening for `messageReactionAdd` events.
     - `src/bot.js` parses custom GarryCoin emojis (e.g., `1GarryCoin`, `5GarryCoin`, `10GarryCoin`) to determine the transfer amount and calls the `transfer` function.
 - **Docker Compose and Project Structure Updates**:
-    - Modified `package.json` to include separate `start-api` (for slash commands) and `start-bot` (for emoji reactions) scripts.
+    - Modified `package.json` to include separate `dev-api` (for slash commands) and `dev-bot` (for emoji reactions) scripts.
     - Updated `docker-compose.yml` to run two distinct services: `api` (renamed from `bot`) and a new `emoji-bot`, each executing their respective start scripts.
 - **Debugging and Permissions**:
     - Addressed "Used disallowed intents" error by instructing the user to enable the `Message Content Intent` in the Discord Developer Portal.
@@ -96,7 +96,7 @@ This session focused on implementing the remaining slash commands and troublesho
     - Guided the user through checking contexts (`docker context ls`), switching to the correct context (`docker context use default`), and ultimately restarting Docker Desktop, which resolved the problem.
 - **Docker Cleanup**:
     - Explained how to use `docker-compose down` with flags like `--volumes` and `--rmi all` to completely remove containers, networks, and optionally volumes and images for a clean rebuild.
-    
+
 # 2025-07-02 Session Summary (Deployment to Render)
 
 This session focused on deploying the GarryCoin bot to Render, establishing a CI/CD pipeline with GitHub, and resolving deployment-related issues.
@@ -109,7 +109,7 @@ This session focused on deploying the GarryCoin bot to Render, establishing a CI
 - **Render Service Setup**:
     - Created a PostgreSQL database on Render (`garrycoin_db`).
     - Configured the `garrycoin-api` (Web Service) and `garrycoin-emoji-bot` (Background Worker) services on Render.
-    - Adjusted `Dockerfile` and `package.json` to integrate `knex migrate:latest` directly into the `start-api` and `start-bot` scripts (`migrate-and-start-api`, `migrate-and-start-bot`) to work around Render's free-tier limitations on "Build Commands" and "Pre-Deploy Commands".
+    - Adjusted `Dockerfile` and `package.json` to integrate `knex migrate:latest` directly into the `dev-api` and `dev-bot` scripts (`migrate-and-start-api`, `migrate-and-start-bot`) to work around Render's free-tier limitations on "Build Commands" and "Pre-Deploy Commands".
 - **Troubleshooting Render Deployment**:
     - **`ECONNREFUSED` Error**: Resolved by updating `knexfile.js` to use `process.env.DATABASE_URL` for the `production` environment and ensuring `NODE_ENV=production` was set on Render.
     - **`self-signed certificate` Error**: Fixed by adding `ssl: { rejectUnauthorized: false }` to the Knex production connection in `knexfile.js`.
@@ -120,3 +120,7 @@ This session focused on deploying the GarryCoin bot to Render, establishing a CI
     - Modified `garrymakeitrain.js` to correctly fetch guild members using the `client` object.
     - Updated `src/index.js` to create a `discord.js` `Client` instance and pass it to the command's `execute` function.
 - **TODO.md Update**: Added "Set up a proper testing bot" to `TODO.md`.
+
+# 2025-07-04 Session Summary (Cleaning up dev)
+- **testing bot**: .env configs the testing version of test-garrycoin_bot. Locally we use docker-compose to run the bot, the api, the postgres db, and migrations. We use Heroku to connect to discord. ENV variables are from .env . In prod, we use Render to standup these services, and call the mirgrate-and-start- versions in package.json. The ENV variables for prod are maintned in Render.
+- **Use nodemon**: For local dev, we should be using nodemon. In package.json we use the dev- commands to start the api and bot with nodemon.

@@ -28,14 +28,14 @@ We will use Render's "Blueprint" feature to define all the necessary services in
     *   **Type:** Web Service.
     *   **Build:** Use the project's `Dockerfile`.
     *   **Build Command:** `npx knex migrate:latest` (This runs database migrations on every deploy).
-    *   **Start Command:** `npm run start-api`.
+    *   **Start Command:** `npm run dev-api`.
     *   **Health Check Path:** `/` (Our `index.js` handles this).
 
 3.  **Emoji Bot (as a "Background Worker"):**
     *   **Source:** The GitHub repository.
     *   **Type:** Background Worker.
     *   **Build:** Use the project's `Dockerfile`.
-    *   **Start Command:** `npm run start-bot`.
+    *   **Start Command:** `npm run dev-bot`.
 
 ### Step 3: Configure Environment Variables
 
