@@ -2,11 +2,6 @@ version: '3.8'
 services:
   api:
     build: .
-    depends_on:
-      db:
-        condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - DB_HOST=db
@@ -24,15 +19,10 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
-    command: npm run start-api
+    command: npm run dev-api
 
   emoji-bot:
     build: .
-    depends_on:
-      db:
-        condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
@@ -44,7 +34,7 @@ services:
     volumes:
       - ./src:/usr/src/app/src
     restart: unless-stopped
-    command: npm run start-bot
+    command: npm run dev-bot
 
   migrations:
     build: .
@@ -74,7 +64,7 @@ services:
       - 5432:5432
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
