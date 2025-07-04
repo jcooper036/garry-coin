@@ -8,7 +8,7 @@
     "dev-bot": "nodemon src/bot.js",
     "start-api": "node src/index.js",
     "start-bot": "node src/bot.js",
-    "migrate-and-start-api": "npx knex migrate:latest && npm run register && npm run start-api",
+    "migrate-and-start-api": "npx knex migrate:latest && npm run start-api",
     "migrate-and-start-bot": "npx knex migrate:latest && npm run start-bot",
     "register": "node src/register-commands.js",
     "grant_gc": "node src/grant_gc.js"
