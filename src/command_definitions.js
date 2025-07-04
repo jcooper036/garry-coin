@@ -53,6 +53,34 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'garrybotrequest',
+    description: 'Submit a bug report or feature request.',
+    options: [
+      {
+        name: 'type',
+        description: 'The type of request.',
+        type: 3, // STRING type
+        required: true,
+        choices: [
+          {
+            name: 'Bug Report',
+            value: 'bug'
+          },
+          {
+            name: 'Feature Request',
+            value: 'feature-request'
+          }
+        ]
+      },
+      {
+        name: 'description',
+        description: 'A detailed description of the bug or feature.',
+        type: 3, // STRING type
+        required: true
+      }
+    ]
+  }
 ];
 
 module.exports = commands;
