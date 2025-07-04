@@ -71,10 +71,6 @@ let lastGrantedTime = 0;
 const COOLDOWN_PERIOD = 60 * 1000; // 1 minute
 
 client.on('messageCreate', async message => {
-  if (message.author.bot) {
-    console.log("No granting for bot")
-    return;
-  };
 
   const now = Date.now();
   if (now - lastGrantedTime < COOLDOWN_PERIOD) {
