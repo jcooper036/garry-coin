@@ -55,6 +55,18 @@ services:
       - ./db/migrations:/usr/src/app/db/migrations
     command: npx knex migrate:latest
 
+  command_registration:
+    build: .
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - APP_ID=${APP_ID}
+      - GUILD_ID=${GUILD_ID}
+      - PUBLIC_KEY=${PUBLIC_KEY}
+      - PORT=${PORT}
+    volumes:
+      - ./src:/usr/src/app/src
+    command: npm run register
+
   db:
     image: postgres:13
     environment:
