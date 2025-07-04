@@ -9,7 +9,7 @@ module.exports = {
     const displayName = interaction.member.displayName;
 
     return {
-      content: `${displayName} has ${balance} GarryCoin in their wallet.`,
+      content: `You have ${balance} GarryCoin in you wallet.`,
       ephemeral: false,
     };
   },
