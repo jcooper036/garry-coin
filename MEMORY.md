@@ -124,3 +124,22 @@ This session focused on deploying the GarryCoin bot to Render, establishing a CI
 # 2025-07-04 Session Summary (Cleaning up dev)
 - **testing bot**: .env configs the testing version of test-garrycoin_bot. Locally we use docker-compose to run the bot, the api, the postgres db, and migrations. We use Heroku to connect to discord. ENV variables are from .env . In prod, we use Render to standup these services, and call the mirgrate-and-start- versions in package.json. The ENV variables for prod are maintned in Render.
 - **Use nodemon**: For local dev, we should be using nodemon. In package.json we use the dev- commands to start the api and bot with nodemon.
+
+# 2025-07-04 Session Summary (GitHub Integration)
+
+This session focused on integrating the bot with GitHub to allow users to submit bug reports and feature requests directly from Discord.
+
+- **`/garrybotrequest` Feature Implementation**:
+    - Created a new slash command, `/garrybotrequest`, which takes a `type` (bug or feature) and a `description`.
+    - The command logic, located in `src/commands/garrybotrequest.js`, constructs a GitHub issue with a standardized title, a body containing user and guild information, and appropriate labels (`triage`, `bug`/`feature-request`).
+    - The feature uses a GitHub Personal Access Token (PAT) for authentication, configured via new environment variables (`GITHUB_TOKEN`, `GITHUB_REPO_OWNER`, `GITHUB_REPO_NAME`).
+    - On successful issue creation, the bot replies with an ephemeral message containing a link to the new issue.
+
+- **`ERR_REQUIRE_ESM` Bug Fix**:
+    - The initial implementation crashed because `node-fetch` (v3+) is an ES Module, but the project uses CommonJS (`require`).
+    - Resolved the issue by replacing the static `require('node-fetch')` with a dynamic `import('node-fetch')` within the command's `execute` function.
+
+- **Future Improvement (GitHub App)**:
+    - Discussed having the bot submit issues as itself (a GitHub App) instead of using a user's PAT.
+    - This would provide better attribution but requires a more complex authentication flow (JWTs, installation tokens).
+    - The user decided to postpone this improvement, and it was added to `TODO.md` for future consideration.
