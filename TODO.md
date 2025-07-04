@@ -6,3 +6,4 @@ Add issues and features to track for developemnt. Use markdown formatting to gro
 
 # Features
 - Set up a proper testing bot.
+- Have the bot submit issues to GitHub as itself using a GitHub App instead of a user's PAT.

@@ -14,6 +14,9 @@ services:
       - GUILD_ID=${GUILD_ID}
       - PUBLIC_KEY=${PUBLIC_KEY}
       - PORT=${PORT}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPO_OWNER=${GITHUB_REPO_OWNER}
+      - GITHUB_REPO_NAME=${GITHUB_REPO_NAME}
     volumes:
       - ./src:/usr/src/app/src
     restart: unless-stopped
