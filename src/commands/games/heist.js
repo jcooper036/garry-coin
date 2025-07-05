@@ -31,7 +31,7 @@ module.exports = {
     const payout = wager * 2;
     if (bot.balance < payout) {
       return {
-        content: `The vault is too empty for a heist of this size. The bot only has ${bot.balance} coins. Try a smaller amount.`,
+        content: `The vault is too empty for a heist of this size. The bot only has ${bot.balance} coins, so the most you can wager is ${bot.balance / 2}`,
         ephemeral: true,
       };
     }

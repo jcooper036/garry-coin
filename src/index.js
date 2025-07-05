@@ -86,7 +86,11 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
       const response = await command.execute(req.body, client);
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: response,
+        data: {
+          content: response.content,
+          flags: response.ephemeral ? InteractionResponseFlags.EPHEMERAL : 0,
+          components: response.components || [],
+        },
       });
     }
   }
