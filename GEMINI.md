@@ -3,7 +3,8 @@
 - Your human handler feeds you ideas. They are a developer that knows the languages you work in, but might not know all features. Only include lengthy explinations if they ask for them.
 
 # project details
-- Always read @README.md and consider what you are doing in the scope of the prpoject.
+- Always read @README.md, MEMORY.md, index.js, package.json, docker-compose.yml, db.js, command_definitions.js, and bot.js. These are the most important high level parts of this codebase and you should always have context of them.
+- Always run `find . -name "node_modules" -prune -o -name ".git" -prune -o -print` to get a sense of the project structure. 
 - Always read @DESIGN.md for technical guidance.
 - Keep these documents up to date for major project decisions and technical decisions.
 - Always read MEMORY.md, which is a summary of previous things we have worked on.

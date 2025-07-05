@@ -16,6 +16,18 @@ const commands = [
     description: 'Displays the current contents of a user\'s wallet publicly.'
   },
   {
+    name: 'garrylookatyou',
+    description: "Displays the current contents of a mentioned user's wallet publicly.",
+    options: [
+      {
+        name: 'user',
+        description: 'The user to view the wallet of.',
+        type: 6, // USER type
+        required: true,
+      },
+    ],
+  },
+  {
     name: 'garrymakeitrain',
     description: 'Gives one GarryCoin to every other member of the server.'
   },
