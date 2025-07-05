@@ -8,7 +8,7 @@ module.exports = {
     const balance = user ? user.balance : 0;
 
     return {
-      content: `${interaction.member.user.global_name} has ${balance} GarryCoin in their wallet.`,
+      content: `<@${userId}> has ${balance} GarryCoin in their wallet.`,
       ephemeral: false,
     };
   },

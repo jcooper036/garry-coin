@@ -15,7 +15,7 @@ module.exports = {
 
     if (transactions.length === 0) {
       return {
-        content: `User ${targetUser.username} has no transaction history.`,
+        content: `User <@${targetUserId}> has no transaction history.`,
         ephemeral: false,
       };
     }
@@ -27,7 +27,7 @@ module.exports = {
     }).join('\n');
 
     return {
-      content: `Last 10 transactions for ${targetUser.username}:\n${history}`,
+      content: `Last 10 transactions for <@${targetUserId}>:\n${history}`,
       ephemeral: false,
     };
   },
