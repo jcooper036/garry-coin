@@ -87,7 +87,7 @@ client.on('messageCreate', async message => {
   }
 
   try {
-    const randomUser = await getRandomActiveUser(7); // Get a random user active in the last 7 days
+    const randomUser = await getRandomActiveUser(14); // Get a random user active in the last 14 days
 
     if (randomUser) {
       lastGrantedTime = now;
@@ -98,7 +98,7 @@ client.on('messageCreate', async message => {
         console.error(`Failed to grant GarryCoin to user ${randomUser.user_id}: ${result.message}`);
       }
     } else {
-        console.log('No active users found for the lottery.');
+      console.log('No active users found for the lottery.');
     }
   } catch (error) {
     console.error('Error granting random GarryCoin:', error);
