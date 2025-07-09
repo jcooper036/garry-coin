@@ -172,3 +172,23 @@ This session focused on implementing a new game, `/heist`, and improving usernam
     - Reviewed `src/commands/garryhistory.js` (already using `<@USER_ID>`).
     - Updated `src/commands/garryreceipt.js` to consistently use `<@USER_ID>` for all username displays.
     - Reviewed `src/commands/garrysend.js` and `src/commands/garrymakeitrain.js` (no changes needed for username display).
+
+# 2025-07-09 Session Summary
+
+This session focused on improving the lottery system and adding advanced features to the `/heist` game.
+
+- **Lottery Activity Tracking**:
+    - To prevent the lottery from granting coins to inactive users, we implemented activity tracking.
+    - Created a database migration to add a `last_active_at` timestamp column to the `users` table.
+    - Updated `src/db.js` to automatically update this timestamp whenever a user sends a message (`updateUserActivity`) or uses a slash command (`findOrCreateUser`).
+    - Modified the lottery logic in `src/bot.js` to only select a winner from users active in the last 7 days, using a new `getRandomActiveUser` database function.
+
+- **Heist Game Enhancements**:
+    - **User Targeting**: Modified the `/heist` command to allow a player to target another user instead of only the bot. This involved updating the command definition, the command execution logic, and the button interaction handler.
+    - **Dynamic Success Chance**: Implemented a variable success chance for heists based on the target's inactivity. The probability of a successful heist now scales linearly from a 33% chance for a target active within 2 days, up to a 90% chance for a target inactive for 14 days or more. Heists against the bot have a fixed 50% chance.
+    - Added a `getUser` function to `src/db.js` to retrieve the necessary activity data for the calculation.
+    - Updated the result message to include the calculated success percentage for transparency.
+
+- **Bug Fixing**:
+    - Resolved a `TypeError` in the `/heist` command caused by an incorrect function signature in `src/commands/games/heist.js`.
+    - Addressed a recurring Docker daemon error when running database migrations.

@@ -1,15 +1,17 @@
 
 
-const { findOrCreateUser } = require('../../db');
+const { findOrCreateUser, getBalance } = require('../../db');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 module.exports = {
-  name: 'garryheist',
-  description: 'Attempt to steal GarryCoins from the bot in a game of chance.',
+  name: 'heist',
+  description: 'Attempt to steal GarryCoins from another user or the bot.',
+  ephemeral: false,
   async execute(interaction, client) {
-    const wager = interaction.data.options.find(opt => opt.name === 'amount').value;
+    const options = interaction.data.options;
+    const wager = options.find(opt => opt.name === 'amount').value;
+    const targetUserOption = options.find(opt => opt.name === 'user');
     const playerId = interaction.member.user.id;
-    const botId = process.env.APP_ID;
 
     if (wager <= 0) {
       return {
@@ -19,19 +21,32 @@ module.exports = {
     }
 
     const player = await findOrCreateUser(playerId);
-    const bot = await findOrCreateUser(botId);
-
     if (player.balance < wager) {
       return {
-        content: `You don't have enough GarryCoins to make that wager. Your balance is ${player.balance}.`,
+        content: `You don\'t have enough GarryCoins for this heist. Your balance is ${player.balance}.`,
         ephemeral: true,
       };
     }
 
-    const payout = wager * 2;
-    if (bot.balance < payout) {
+    let targetId;
+    let targetName;
+
+    if (targetUserOption) {
+      targetId = targetUserOption.value;
+      const targetUser = interaction.data.resolved.users[targetId];
+      targetName = targetUser.global_name || targetUser.username;
+      if (targetId === playerId) {
+        return { content: "You can't heist yourself!", ephemeral: true };
+      }
+    } else {
+      targetId = client.user.id;
+      targetName = 'the bot';
+    }
+
+    const target = await findOrCreateUser(targetId);
+    if (target.balance < wager) {
       return {
-        content: `The vault is too empty for a heist of this size. The bot only has ${bot.balance} coins, so the most you can wager is ${bot.balance / 2}`,
+        content: `${targetName} is too poor for this heist. They only have ${target.balance} GarryCoins.`,
         ephemeral: true,
       };
     }
@@ -39,24 +54,22 @@ module.exports = {
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId(`garryheist_red_${playerId}_${wager}`)
+          .setCustomId(`heist_red_${wager}_${targetId}`)
           .setLabel('Cut Red Wire')
           .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
-          .setCustomId(`garryheist_blue_${playerId}_${wager}`)
+          .setCustomId(`heist_blue_${wager}_${targetId}`)
           .setLabel('Cut Blue Wire')
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-          .setCustomId(`garryheist_green_${playerId}_${wager}`)
+          .setCustomId(`heist_green_${wager}_${targetId}`)
           .setLabel('Cut Green Wire')
           .setStyle(ButtonStyle.Success),
       );
 
     return {
-      content: `<@${playerId}> is attempting to steal from GarryCoinBot, wagering ${wager} GC
-Cut the right wire, get the prize.`,
+      content: `<@${playerId}> is attempting a heist on ${targetName} for ${wager} GarryCoin!\nChoose a wire to cut. Choose wisely...`,
       components: [row],
-      ephemeral: false,
     };
   },
 };
