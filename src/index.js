@@ -3,7 +3,7 @@ const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
-const { findOrCreateUser, transfer } = require('./db');
+const { findOrCreateUser, transfer, updateUserActivity } = require('./db');
 const fs = require('fs');
 const path = require('path');
 
@@ -53,6 +53,11 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     const { name, options } = data;
     const { user } = req.body.member;
     const { channel_id, guild_id, channel } = req.body;
+    try {
+      await updateUserActivity(user.id);
+    } catch (error) {
+      console.error(`Failed to update activity for ${user.id}:`, error);
+    }
     console.log(`Command received: ${name}`);
     console.log(`User: ${user.id} (${user.username}) (${user.global_name})`);
     console.log(`Channel: ${channel_id} (${channel.name}) Guild:${guild_id}`);

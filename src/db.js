@@ -6,12 +6,38 @@ const db = knex(knexConfig[environment]);
 
 async function findOrCreateUser(userId) {
   let user = await db('users').where({ user_id: userId }).first();
-  if (!user) {
-    user = { user_id: userId, balance: 0 };
+  if (user) {
+    // User exists, update their last active time
+    await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
+  } else {
+    // User doesn't exist, create them
+    user = { user_id: userId, balance: 0, last_active_at: db.fn.now() };
     await db('users').insert(user);
   }
   return user;
 }
+
+async function updateUserActivity(userId) {
+  console.log(`updating ${userId} last activity`)
+  await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
+}
+
+async function getRandomActiveUser(daysInactive = 7) {
+  const activeSince = new Date();
+  activeSince.setDate(activeSince.getDate() - daysInactive);
+
+  const activeUsers = await db('users')
+    .where('last_active_at', '>=', activeSince)
+    .select('user_id');
+
+  if (activeUsers.length === 0) {
+    return null;
+  }
+
+  const randomIndex = Math.floor(Math.random() * activeUsers.length);
+  return activeUsers[randomIndex];
+}
+
 
 async function transfer(senderId, receiverId, amount, transaction_type) {
   if (amount <= 0) {
@@ -60,4 +86,6 @@ module.exports = {
   transfer,
   recordTransaction,
   grant,
+  updateUserActivity,
+  getRandomActiveUser,
 };

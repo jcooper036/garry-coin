@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { transfer, grant } = require('./db');
+const { transfer, grant, updateUserActivity, getRandomActiveUser } = require('./db');
 
 const client = new Client({
   intents: [
@@ -71,28 +71,34 @@ let lastGrantedTime = 0;
 const COOLDOWN_PERIOD = 60 * 1000; // 1 minute
 
 client.on('messageCreate', async message => {
+  if (message.author.bot) return; // Ignore bots
+
+  // Update user's activity timestamp
+  try {
+    await updateUserActivity(message.author.id);
+  } catch (error) {
+    console.error(`Failed to update activity for ${message.author.id}:`, error);
+  }
+
 
   const now = Date.now();
   if (now - lastGrantedTime < COOLDOWN_PERIOD) {
-    console.log("Coin granting on cooldown")
-    return;
+    return; // Still on cooldown
   }
 
   try {
-    const guild = message.guild;
-    if (!guild) return;
+    const randomUser = await getRandomActiveUser(14); // Get a random user active in the last 14 days
 
-    const members = await guild.members.fetch();
-    const randomMember = members.random();
-
-    if (randomMember) {
+    if (randomUser) {
       lastGrantedTime = now;
-      const result = await grant(randomMember.id, 1, 'lottery_grant');
+      const result = await grant(randomUser.user_id, 1, 'lottery_grant');
       if (result.success) {
-        console.log(`Successfully granted 1 GarryCoin to ${randomMember.user.tag}.`);
+        console.log(`Successfully granted 1 GarryCoin to user ${randomUser.user_id}.`);
       } else {
-        console.error(`Failed to grant GarryCoin to ${randomMember.user.tag}: ${result.message}`);
+        console.error(`Failed to grant GarryCoin to user ${randomUser.user_id}: ${result.message}`);
       }
+    } else {
+      console.log('No active users found for the lottery.');
     }
   } catch (error) {
     console.error('Error granting random GarryCoin:', error);
