@@ -22,6 +22,10 @@ async function updateUserActivity(userId) {
   await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
 }
 
+async function getUser(userId) {
+  return db('users').where({ user_id: userId }).first();
+}
+
 async function getRandomActiveUser(daysInactive = 7) {
   const activeSince = new Date();
   activeSince.setDate(activeSince.getDate() - daysInactive);
@@ -88,4 +92,5 @@ module.exports = {
   grant,
   updateUserActivity,
   getRandomActiveUser,
+  getUser,
 };

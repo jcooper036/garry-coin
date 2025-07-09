@@ -94,14 +94,20 @@ const commands = [
     ]
   },
   {
-    name: 'garryheist',
-    description: 'Attempt to steal GarryCoins from the bot in a game of chance.',
+    name: 'heist',
+    description: 'Attempt to steal GarryCoins from another user or the bot.',
     options: [
       {
         name: 'amount',
         description: 'The amount of GarryCoins to wager.',
         type: 4, // INTEGER type
         required: true,
+      },
+      {
+        name: 'user',
+        description: 'The user to heist from (defaults to the bot).',
+        type: 6, // USER type
+        required: false,
       },
     ],
   }

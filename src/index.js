@@ -3,7 +3,7 @@ const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
-const { findOrCreateUser, transfer, updateUserActivity } = require('./db');
+const { findOrCreateUser, transfer, updateUserActivity, getUser } = require('./db');
 const fs = require('fs');
 const path = require('path');
 
@@ -102,11 +102,13 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
   if (type === InteractionType.MESSAGE_COMPONENT) {
     const { custom_id } = data;
-    const [game, choice, playerId, wagerStr] = custom_id.split('_');
+    const [game, choice, wagerStr, targetId] = custom_id.split('_');
     const wager = parseInt(wagerStr, 10);
-    const clickerId = req.body.member.user.id;
-    console.log(game, wager)
-    if (clickerId !== playerId) {
+    const playerId = req.body.member.user.id;
+
+    // The original interaction contains the ID of the user who initiated the command.
+    // We check to make sure the person clicking the button is the one who started the heist.
+    if (req.body.message.interaction.user.id !== playerId) {
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -116,19 +118,40 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
       });
     }
 
-    if (game === 'garryheist') {
-      const wires = ['red', 'blue', 'green'];
-      const winningWire = wires[Math.floor(Math.random() * wires.length)];
-      const botId = process.env.APP_ID;
+    if (game === 'heist') {
+      let successChance = 0.5; // Default 50% chance for the bot
+      const botId = client.user.id;
+
+      if (targetId !== botId) {
+        const targetUser = await getUser(targetId);
+        if (targetUser && targetUser.last_active_at) {
+          const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
+          
+          const minChance = 0.33;
+          const maxChance = 0.90;
+          const minDays = 2;
+          const maxDays = 14;
+
+          if (daysInactive <= minDays) {
+            successChance = minChance;
+          } else if (daysInactive >= maxDays) {
+            successChance = maxChance;
+          } else {
+            const slope = (maxChance - minChance) / (maxDays - minDays);
+            successChance = minChance + (slope * (daysInactive - minDays));
+          }
+        }
+      }
+
+      const win = Math.random() < successChance;
       let resultMessage = '';
 
-      if (choice === winningWire) {
-        const payout = wager * 2;
-        await transfer(botId, playerId, payout, 'heist_win');
-        resultMessage = `Success! <@${playerId}> cut the ${choice} wire and cracked the vault, stealing ${payout} GarryCoins!`
+      if (win) {
+        await transfer(targetId, playerId, wager, 'heist_win');
+        resultMessage = `Success! <@${playerId}> cut the ${choice} wire and pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>! (Chance: ${Math.round(successChance * 100)}%)`;
       } else {
-        await transfer(playerId, botId, wager, 'heist_loss');
-        resultMessage = `LMAO <@${playerId}> cut the wrong wire. The correct wire was ${winningWire}. They lost ${wager} GarryCoins.`
+        await transfer(playerId, targetId, wager, 'heist_loss');
+        resultMessage = `LMAO <@${playerId}> cut the wrong wire and got caught, losing ${wager} GarryCoins to <@${targetId}>`;
       }
 
       // Disable buttons on the original message
