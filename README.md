@@ -1,4 +1,3 @@
-# GarryCoin
 
 GarryCoin is a project centered around the community of GarryCoin. The coin itself is a crypto-currency which is managed by the GarryCoin Foundation (TM). GarryCoin has no intrinsic value - its only use is as a cross-channel form of points in discord. The coin is "mined" with each discord post by users, and can be distributed to other users in the form of using emojis on their posts. That's it, that's the whole thing.
 
