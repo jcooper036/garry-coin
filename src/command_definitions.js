@@ -110,6 +110,18 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garryridethebus',
+    description: 'Start a game of Ride the Bus.',
+    options: [
+      {
+        name: 'wager',
+        description: 'The amount of GarryCoins to wager.',
+        type: 4, // INTEGER type
+        required: true,
+      },
+    ],
   }
 ];
 
