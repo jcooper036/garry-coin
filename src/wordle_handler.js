@@ -43,24 +43,25 @@ async function handleWordleMessage(message) {
         let finalAmount = 0;
         let transactionType = '';
         let reportString = '';
+        let finalTries = tries;
 
         if (isCheater) {
             finalAmount = -CHEAT_PENALTY;
             transactionType = 'wordle_cheat_fine';
-            reportString = `🕵️ <@${userId}> was caught trying to cheat the Wordle and has been fined ${CHEAT_PENALTY} GC!`
-        } else if (tries) { // tries will be null for X/6 scores
+            reportString = `🕵️ <@${userId}> was caught trying to cheat the Wordle and has been fined ${CHEAT_PENALTY} GC!`;
+        } else if (tries) { // Solved
             finalAmount = REWARD_STRUCTURE[tries] || 0;
             transactionType = 'wordle_reward';
-            reportString = `🎉 <@${userId}> solved the Wordle in ${tries} tries and gets ${finalAmount} GC!`
-        } else {
-            // User did not solve (X/6)
-            reportString = `🧐 <@${userId}> didn't solve the Wordle today. Better luck next time!`
+            reportString = `🎉 <@${userId}> solved the Wordle in ${tries} tries and gets ${finalAmount} GC!`;
+        } else { // Unsolved (X/6)
+            finalAmount = 0;
+            finalTries = 10; // Set tries to 10 for unsolved
+            transactionType = 'wordle_unsolved';
+            reportString = `🧐 <@${userId}> didn't solve the Wordle today. Better luck next time!`;
         }
 
-        // Record the transaction and wordle history
-        if (transactionType) { // Only run DB transactions if there was a financial event
-            await processWordleTransaction(userId, tries, finalAmount, isCheater, transactionType);
-        }
+        // Always record the event in the database
+        await processWordleTransaction(userId, finalTries, finalAmount, isCheater, transactionType);
         
         reportLines.push(reportString);
     }
@@ -75,12 +76,8 @@ function parseWordleResults(content, mentions) {
     const results = {};
     const lines = content.split('\n').slice(1); // Skip the first line
 
-    const mentionMap = new Map();
-    mentions.forEach(user => {
-        // Map both global_name and username to user_id for matching
-        if (user.global_name) mentionMap.set(user.global_name.toLowerCase(), user.id);
-        if (user.username) mentionMap.set(user.username.toLowerCase(), user.id);
-    });
+    // Use the mentions collection to get a set of all valid, mentioned user IDs.
+    const validUserIds = new Set(mentions.keys());
 
     for (const line of lines) {
         const parts = line.split(':');
@@ -94,11 +91,15 @@ function parseWordleResults(content, mentions) {
 
         const tries = triesMatch[1] === 'X' ? null : parseInt(triesMatch[1], 10);
 
-        const userMentions = usersPart.match(/@(\S+)/g) || [];
-        for (const mention of userMentions) {
-            const username = mention.substring(1).toLowerCase();
-            const userId = mentionMap.get(username);
-            if (userId) {
+        // Regex to find all full user ID mentions, e.g., <@123456789012345678>
+        const userIdMentions = usersPart.match(/<@!?(\d+)>/g) || [];
+
+        for (const mention of userIdMentions) {
+            // Extract just the numeric ID from the mention string
+            const userId = mention.replace(/<@!?/, '').replace('>', '');
+
+            // If the extracted ID is in the set of valid mentions, add it to the results.
+            if (validUserIds.has(userId)) {
                 results[userId] = { tries };
             }
         }
