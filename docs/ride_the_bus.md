@@ -21,3 +21,6 @@ Iteritive gambling game played with one or more players.
 - we need to check that players have enough coins for the ride at the beginning. If not, they should get a message that says "You're too poor for the bus in this part of town (#gc short)"
 - assume each draw is from a fresh deck so we don't have to persist a deck state or anything
 - we can only have one game of ride the bus going at once. If players try to start a new one while the game is active, they get a message that says "you need to wait for the next bus"
+- a key part of the user experience is that all users in the channel can see the game and the state of the game - that they are playing it collectively rather than in isolation. Therefore
+    - we want the game to take place on a single message
+    - we can use ephemeral messages only for particular states for specific users (don't have enough coins to play, there is already a game going, you are already in the game / you started the game)
