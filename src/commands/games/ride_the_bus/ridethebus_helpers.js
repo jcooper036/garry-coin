@@ -303,9 +303,9 @@ async function processRoundResults(gameId, client) {
     await updateBusGame(gameId, { current_cards: JSON.stringify(allCards) });
 
     const nextPhase = Phases[game.current_phase].next;
-    const stillOnBus = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' }).first();
+    const stillOnBus = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' });
 
-    if (!nextPhase || !stillOnBus) {
+    if (!nextPhase || stillOnBus.length === 0) {
         await endGame(gameId, client);
     } else {
         await startNextPhase(gameId, nextPhase, client);
@@ -331,10 +331,13 @@ async function endGame(gameId, client) {
     const cashedOut = players.filter(p => p.player_status === 'cashed_out');
     const dead = players.filter(p => p.player_status === 'dead_in_road');
 
+    console.log(`[Game ${gameId}] Final tallies - End of Line: ${endOfLine.length}, Cashed Out: ${cashedOut.length}, Dead: ${dead.length}`);
+
     if (endOfLine.length > 0) {
-        summary += `**End of the Line (${endOfLine.length}):**\n`;
+        summary += `**🏁 End of the Line (${endOfLine.length}):**\n`;
         for (const player of endOfLine) {
             const winnings = game.wager * Payouts[4];
+            console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for reaching the end.`);
             await grant(player.user_id, winnings, 'rtb_win_end_of_line');
             summary += `<@${player.user_id}> made it all the way and wins **${winnings} GC**!\n`;
         }
@@ -342,26 +345,30 @@ async function endGame(gameId, client) {
     }
 
     if (cashedOut.length > 0) {
-        summary += `**Made it to their stop (${cashedOut.length}):**\n`;
+        summary += `**💰 Cashed Out (${cashedOut.length}):**\n`;
         for (const player of cashedOut) {
             const winnings = game.wager * Payouts[player.stops_rode];
+            console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
             await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
             summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
         }
         summary += '\n';
     }
-
+    
     if (dead.length > 0) {
-        summary += `**Dead in the road (${dead.length}):**\n`;
+        summary += `**💀 Dead in the Road (${dead.length}):**\n`;
         for (const player of dead) {
+            console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
             // Wager was already taken at the start, so no transaction needed.
             summary += `<@${player.user_id}> lost their **${game.wager} GC** fare.\n`;
         }
     }
 
+    console.log(`[Game ${gameId}] Sending final message.`);
     const channel = await client.channels.fetch(game.channel_id);
     const message = await channel.messages.fetch(game.message_id);
     await message.edit({ content: summary, components: [] });
+    console.log(`[Game ${gameId}] Final message sent.`);
 }
 
 
