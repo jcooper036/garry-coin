@@ -33,7 +33,6 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 ## v1 - Targeted 2025-08-01
 ### In progress
 #### Features
-- wordle rewards
 - ride the bus
 - wavelength game
 
@@ -42,8 +41,9 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 
 ### Completed
 #### Features
+- wordle rewards
 
-#### Backend
+### Backend
 - migrated db from Render DB (free tier ending) to Supabase (free tier)
 
 ## v0 GC Release 2025-07-04
