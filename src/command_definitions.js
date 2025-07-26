@@ -121,6 +121,12 @@ const commands = [
         type: 4, // INTEGER type
         required: true,
       },
+      {
+        name: 'boarding_time',
+        description: 'The time in seconds for players to join the bus (default: 30).',
+        type: 4, // INTEGER type
+        required: false,
+      },
     ],
   }
 ];

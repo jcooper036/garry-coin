@@ -125,7 +125,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const messageData = await messageResponse.json();
 
         const game = await createBusGame(response.hostId, channel_id, messageData.id, response.wager);
-        startJoinTimer(game.id, client);
+        startJoinTimer(game.id, client, response.boardingTime);
         return;
       }
 

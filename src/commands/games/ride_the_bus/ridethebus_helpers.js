@@ -39,8 +39,9 @@ function createDeck() {
     return deck;
 }
 
-async function startJoinTimer(gameId, client) {
-    console.log(`Starting join timer for game ${gameId}`);
+async function startJoinTimer(gameId, client, boardingTime) {
+    const duration = (boardingTime || 30) * 1000;
+    console.log(`[Game ${gameId}] Starting join timer for ${boardingTime} seconds.`);
     setTimeout(async () => {
         const game = await getBusGame(gameId);
         // If the game was cancelled, do nothing.
@@ -52,7 +53,7 @@ async function startJoinTimer(gameId, client) {
             // But as a safeguard, we cancel if there are no players for some reason.
             console.log(`Game ${gameId} cancelled due to lack of players.`);
             await updateBusGame(game.id, { status: 'cancelled' });
-
+            
             // Attempt to refund the host if they exist on the game object
             if (game.host_user_id) {
                 await grant(game.host_user_id, game.wager, 'rtb_refund_no_players');
@@ -68,7 +69,7 @@ async function startJoinTimer(gameId, client) {
             // Start the first phase
             await startNextPhase(game.id, 'color', client);
         }
-    }, Phases.joining.duration);
+    }, duration);
 }
 
 async function startNextPhase(gameId, phase, client) {
