@@ -206,3 +206,4 @@ This session focused on implementing a new Wordle rewards feature. Key aspects i
 - **Dynamic Messaging**: Added random emojis to the report messages for each outcome type (winner, unsolved, cheater) to make them more engaging. Discussed how to incorporate custom Discord emojis.
 - **Parsing Fixes**: Corrected the message parsing logic to properly extract user IDs from Discord's `<@USER_ID>` mention format.
 - **Unsolved Handling**: Ensured that users who don't solve the Wordle (X/6) are still recorded in the `wordle_rewards` table with 10 tries.
+
