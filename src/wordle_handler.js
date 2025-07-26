@@ -43,7 +43,7 @@ async function handleWordleMessage(message) {
     }
 
     // 3. Process each user's result and group them
-    const winners = [];
+    const winnersByTries = {};
     const unsolved = [];
     const cheaters = [];
 
@@ -62,7 +62,10 @@ async function handleWordleMessage(message) {
         } else if (tries) { // Solved
             finalAmount = REWARD_STRUCTURE[tries] || 0;
             transactionType = 'wordle_reward';
-            winners.push({ userId, tries, finalAmount });
+            if (!winnersByTries[tries]) {
+                winnersByTries[tries] = [];
+            }
+            winnersByTries[tries].push(userId);
         } else { // Unsolved (X/6)
             finalAmount = 0;
             finalTries = 10; // Set tries to 10 for unsolved
@@ -76,21 +79,23 @@ async function handleWordleMessage(message) {
 
     // 4. Construct the public report
     const reportLines = [];
-    // Winners get individual lines
-    winners.forEach(winner => {
-        reportLines.push(`${getRandomEmoji(WINNER_EMOJIS)} <@${winner.userId}> solved the Wordle in ${winner.tries} tries and gets ${winner.finalAmount} GC`);
-    });
+    // Batch winners by score
+    for (const tries in winnersByTries) {
+        const userMentions = winnersByTries[tries].map(id => `<@${id}>`).join(', ');
+        const reward = REWARD_STRUCTURE[tries] || 0;
+        reportLines.push(`${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${reward} GC: ${userMentions}`);
+    }
 
     // Unsolved are grouped
     if (unsolved.length > 0) {
         const userMentions = unsolved.map(id => `<@${id}>`).join(', ');
-        reportLines.push(`${getRandomEmoji(UNSOLVED_EMOJIS)} The following users didn't solve the Wordle today: ${userMentions}`);
+        reportLines.push(`${getRandomEmoji(UNSOLVED_EMOJIS)} knew too many words today: ${userMentions}`);
     }
 
     // Cheaters are grouped
     if (cheaters.length > 0) {
         const userMentions = cheaters.map(id => `<@${id}>`).join(', ');
-        reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} The following users were caught cheating by GarrycOinTuringCHeatAudit (GOTCHA) and have been fined ${CHEAT_PENALTY} GC: ${userMentions}`);
+        reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offenders have been finded ${CHEAT_PENALTY} GC: ${userMentions}`);
     }
 
     // 5. Send the public report
