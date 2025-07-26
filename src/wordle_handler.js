@@ -8,7 +8,7 @@ const REWARD_STRUCTURE = {
     5: 1,
     6: 1,
 };
-const CHEAT_PENALTY = 5;
+const CHEAT_PENALTY = 4;
 const CHEAT_CHANCE = 0.2;
 
 const CHEATER_EMOJIS = ['🕵️', '🚔', '🚨', '👮', '⚖️', '🧐', '👀', '🤨'];
