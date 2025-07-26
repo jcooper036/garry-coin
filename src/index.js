@@ -4,7 +4,7 @@ const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers } = require('./db');
-const { startJoinTimer, handlePlayerChoice, buildGameMessage } = require('./commands/games/ride_the_bus/ridethebus_helpers');
+const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const fs = require('fs');
 const path = require('path');
 
@@ -112,7 +112,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         }
 
         const messagePayload = {
-          content: response.content,
+          embeds: response.embeds,
           components: response.components,
         };
 
@@ -173,14 +173,14 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
             return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "You are already on the bus!", flags: InteractionResponseFlags.EPHEMERAL } });
           }
 
-          const messageContent = await buildGameMessage(game.id);
+          const gameEmbed = await buildGameEmbed(game.id);
 
           // Acknowledge interaction, then edit message
           res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
           await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: messageContent, components: req.body.message.components }),
+            body: JSON.stringify({ embeds: [gameEmbed], components: req.body.message.components }),
           });
           return;
         } else { // cancel
@@ -192,11 +192,13 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
             await grant(player.user_id, game.wager, 'rtb_refund_cancel');
           }
 
+          const cancelledEmbed = await buildGameEmbed(game.id);
+
           res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
           await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: `The bus was cancelled by the host. All fares have been refunded.`, components: [] }),
+            body: JSON.stringify({ embeds: [cancelledEmbed], components: [] }),
           });
           return;
         }
@@ -204,7 +206,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const gameId = parseInt(parts[2], 10);
         const response = await handlePlayerChoice(req.body, client);
         if (response.update_message) {
-          const messageContent = await buildGameMessage(gameId);
+          const gameEmbed = await buildGameEmbed(gameId);
 
           // We can't send an ephemeral and update the message in one go.
           // So we'll update the message, and then send a new ephemeral follow-up.
@@ -213,7 +215,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: messageContent, components: req.body.message.components }),
+            body: JSON.stringify({ embeds: [gameEmbed], components: req.body.message.components }),
           });
 
           // Send the ephemeral follow-up

@@ -53,7 +53,7 @@ async function startJoinTimer(gameId, client, boardingTime) {
             // But as a safeguard, we cancel if there are no players for some reason.
             console.log(`Game ${gameId} cancelled due to lack of players.`);
             await updateBusGame(game.id, { status: 'cancelled' });
-            
+
             // Attempt to refund the host if they exist on the game object
             if (game.host_user_id) {
                 await grant(game.host_user_id, game.wager, 'rtb_refund_no_players');
@@ -88,11 +88,11 @@ async function startNextPhase(gameId, phase, client) {
     const channel = await client.channels.fetch(game.channel_id);
     const message = await channel.messages.fetch(game.message_id);
 
-    const messageContent = await buildGameMessage(gameId);
+    const gameEmbed = await buildGameEmbed(gameId);
     const messageComponents = buildGameButtons(phase, gameId);
 
     await message.edit({
-        content: messageContent,
+        embeds: [gameEmbed],
         components: messageComponents,
     });
 
@@ -128,23 +128,48 @@ async function checkAndProcessRound(gameId, client) {
     }
 }
 
-async function buildGameMessage(gameId) {
+async function buildGameEmbed(gameId) {
     const game = await getBusGame(gameId);
     const players = await getBusGamePlayers(gameId);
-
-    const cardSequence = game.current_cards.map(c => `[${c.rank}${Suits[c.suit]}]`).join(' ');
 
     const onBus = players.filter(p => p.player_status === 'on_bus');
     const cashedOut = players.filter(p => p.player_status === 'cashed_out');
     const dead = players.filter(p => p.player_status === 'dead_in_road');
 
-    let message = `**Sequence:** ${cardSequence}\n\n`;
-    message += `**Phase:** ${Phases[game.current_phase].name}\n\n`;
-    message += `**On the bus (${onBus.length}):**\n${onBus.map(p => `<@${p.user_id}>`).join('\n') || 'None'}\n\n`;
-    message += `**Made it to their stop (${cashedOut.length}):**\n${cashedOut.map(p => `<@${p.user_id}> (${p.stops_rode} stop${p.stops_rode > 1 ? 's' : ''})`).join('\n') || 'None'}\n\n`;
-    message += `**Dead in the road (${dead.length}):**\n${dead.map(p => `<@${p.user_id}>`).join('\n') || 'None'}\n`;
+    const onBusList = onBus.map(p => `<@${p.user_id}>`).join('\n') || 'None';
+    const cashedOutList = cashedOut.map(p => `<@${p.user_id}> (${p.stops_rode} stop${p.stops_rode !== 1 ? 's' : ''})`).join('\n') || 'None';
+    const deadList = dead.map(p => `<@${p.user_id}>`).join('\n') || 'None';
 
-    return message;
+    const cardSequence = game.current_cards.map(c => `\`${c.rank}${Suits[c.suit]}\``).join(' ');
+
+    let color = 0x0099ff; // Blue for active
+    let title = "🚌 Ride the Bus";
+    let description = `**Phase:** ${Phases[game.current_phase].name}\n**Sequence:** ${cardSequence}`;
+
+    if (game.status === 'waiting_for_players') {
+        color = 0xffc107; // Yellow for waiting
+        description = `The bus is now boarding! Click "Join Bus" to get on.`;
+    } else if (game.status === 'finished') {
+        color = 0x28a745; // Green for success
+        title = "✅ Bus Ride Finished";
+    } else if (game.status === 'cancelled') {
+        color = 0xdc3545; // Red for cancelled
+        title = "❌ Bus Cancelled";
+        description = "This bus ride was cancelled.";
+    }
+
+
+    return {
+        color: color,
+        title: title,
+        description: description,
+        fields: [
+            { name: `🧑‍🤝‍🧑 On the Bus (${onBus.length})`, value: onBusList, inline: true },
+            { name: `💰 Cashed Out (${cashedOut.length})`, value: cashedOutList, inline: true },
+            { name: `💀 Dead in the Road (${dead.length})`, value: deadList, inline: true }
+        ],
+        footer: { text: `Game ID: ${game.id} | Wager: ${game.wager} GC` }
+    };
 }
 
 function buildGameButtons(phase, gameId) {
@@ -213,7 +238,7 @@ async function handlePlayerChoice(interaction, client) {
         const choice = parts[3]; // e.g., 'red', 'higher'
         await updateBusGamePlayer(gameId, userId, { current_choice: choice });
         console.log(`[Game ${gameId}] Player ${userId} chose: ${choice}`);
-        
+
         // Check if all players have made their choice to proceed the game
         checkAndProcessRound(gameId, client);
 
@@ -228,7 +253,7 @@ async function handlePlayerChoice(interaction, client) {
 
         await updateBusGamePlayer(gameId, userId, { player_status: 'cashed_out', stops_rode: stops });
         console.log(`[Game ${gameId}] Player ${userId} cashed out with ${stops} stop(s).`);
-        
+
         // Also check if the game should proceed now that this player has cashed out
         checkAndProcessRound(gameId, client);
 
@@ -345,30 +370,37 @@ async function endGame(gameId, client) {
         summary += '\n';
     }
 
-    if (cashedOut.length > 0) {
-        summary += `**💰 Cashed Out (${cashedOut.length}):**\n`;
-        for (const player of cashedOut) {
-            const winnings = game.wager * Payouts[player.stops_rode];
-            console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
-            await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
-            summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
-        }
-        summary += '\n';
-    }
-    
-    if (dead.length > 0) {
-        summary += `**💀 Dead in the Road (${dead.length}):**\n`;
-        for (const player of dead) {
-            console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
-            // Wager was already taken at the start, so no transaction needed.
-            summary += `<@${player.user_id}> lost their **${game.wager} GC** fare.\n`;
-        }
-    }
+    // if (cashedOut.length > 0) {
+    //     summary += `**💰 Cashed Out (${cashedOut.length}):**\n`;
+    //     for (const player of cashedOut) {
+    //         const winnings = game.wager * Payouts[player.stops_rode];
+    //         console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
+    //         await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
+    //         summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
+    //     }
+    //     summary += '\n';
+    // }
+
+    // if (dead.length > 0) {
+    //     summary += `**💀 Dead in the Road (${dead.length}):**\n`;
+    //     for (const player of dead) {
+    //         console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
+    //         // Wager was already taken at the start, so no transaction needed.
+    //         summary += `<@${player.user_id}> lost their **${game.wager} GC** fare.\n`;
+    //     }
+    // }
 
     console.log(`[Game ${gameId}] Sending final message.`);
     const channel = await client.channels.fetch(game.channel_id);
     const message = await channel.messages.fetch(game.message_id);
-    await message.edit({ content: summary, components: [] });
+
+    const finalEmbed = await buildGameEmbed(gameId);
+    // if (game.status === 'finished' || game.status == 'cancelled') {
+    //     summary = ''
+    // }
+    finalEmbed.description = summary; // Override the description with the final summary.
+
+    await message.edit({ embeds: [finalEmbed], components: [] });
     console.log(`[Game ${gameId}] Final message sent.`);
 }
 
@@ -376,5 +408,5 @@ async function endGame(gameId, client) {
 module.exports = {
     startJoinTimer,
     handlePlayerChoice,
-    buildGameMessage,
+    buildGameEmbed,
 };

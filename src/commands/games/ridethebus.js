@@ -41,6 +41,16 @@ module.exports = {
             };
         }
 
+        const initialEmbed = {
+            color: 0xffc107, // Yellow
+            title: '🚌 Ride the Bus - Boarding Now!',
+            description: `<@${hostId}> has hailed the bus for a fare of **${wager} GC**!\n\nThe bus departs in **${boardingTime} seconds**.`,
+            fields: [
+                { name: '🧑‍🤝‍🧑 On the Bus', value: `<@${hostId}>`, inline: false }
+            ],
+            footer: { text: `Wager: ${wager} GC` }
+        };
+
         const row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
@@ -52,9 +62,10 @@ module.exports = {
                     .setLabel('Cancel Bus')
                     .setStyle(ButtonStyle.Danger),
             );
-
+        
         const initialMessage = {
-            content: `<@${hostId}> has hailed the bus for a fare of **${wager} GC**!\n\n**On the bus:**\n<@${hostId}>\n\nClick "Join Bus" to get on! The bus departs in ${boardingTime} seconds.`,
+            content: '',
+            embeds: [initialEmbed],
             components: [row],
             ephemeral: false,
             postProcess: 'create_bus_game', // Signal to index.js
