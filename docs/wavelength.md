@@ -18,6 +18,7 @@ They split the pot evenly.
 # Implementation
 ## details
 - When the game starts, the host gets an ephemeral message which they respond to with their answer. After that, we create the main game message which is the interaction point going forward.
+- When the game starts, the host is give a scale (with each end) and a number. They are only coming up with a response. Phrase it as a prompt "On a scale of -3 being worst 5 movies of all time and 3 being best 5 movies, what move would you rate a 2"?
 - That message gets updated (there is only one total message per game visable to the public)
 - Users that are not the host see 
     - the scale
