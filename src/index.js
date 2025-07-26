@@ -4,7 +4,6 @@ const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { findOrCreateUser, transfer, updateUserActivity, getUser } = require('./db');
-const { handleRideTheBusButtonInteraction } = require('./commands/games/ride_the_bus/ridethebus_methods');
 const fs = require('fs');
 const path = require('path');
 
