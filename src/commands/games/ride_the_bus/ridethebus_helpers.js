@@ -1,13 +1,17 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getBusGame, getBusGamePlayers, updateBusGame, updateBusGamePlayer, grant, transfer } = require('../../../db');
+const { db, getBusGame, getBusGamePlayers, getBusGamePlayer, updateBusGame, updateBusGamePlayer, grant, transfer } = require('../../../db');
 
 const JOIN_PERIOD_SECONDS = 5;
+const ROUND_TIMER_SECONDS = 15;
+const activeTimers = new Map();
+
 const Payouts = {
     1: 1,
     2: 2,
     3: 4,
     4: 9, // End of the line
 };
+
 
 const Phases = {
     joining: { next: 'color', duration: JOIN_PERIOD_SECONDS * 1000 },
@@ -48,7 +52,7 @@ async function startJoinTimer(gameId, client) {
             // But as a safeguard, we cancel if there are no players for some reason.
             console.log(`Game ${gameId} cancelled due to lack of players.`);
             await updateBusGame(game.id, { status: 'cancelled' });
-            
+
             // Attempt to refund the host if they exist on the game object
             if (game.host_user_id) {
                 await grant(game.host_user_id, game.wager, 'rtb_refund_no_players');
@@ -68,23 +72,16 @@ async function startJoinTimer(gameId, client) {
 }
 
 async function startNextPhase(gameId, phase, client) {
-    console.log(`Starting phase ${phase} for game ${gameId}`);
+    console.log(`[Game ${gameId}] Starting phase: ${phase}`);
     const game = await getBusGame(gameId);
-    const players = await getBusGamePlayers(gameId);
-
-    const deck = createDeck();
-    const newCards = [];
-    if (phase === 'color') newCards.push(drawCard(deck));
-    if (phase === 'higher_lower') newCards.push(drawCard(deck));
-    if (phase === 'inside_outside') newCards.push(drawCard(deck));
-    if (phase === 'suit') newCards.push(drawCard(deck));
-
-    const allCards = [...game.current_cards, ...newCards];
-
+    if (!game) {
+        console.error(`[Game ${gameId}] Could not find game to start next phase.`);
+        return;
+    }
+    // This function NO LONGER draws a card. It only sets up the state for the next choice.
     await updateBusGame(gameId, {
         status: 'active',
         current_phase: phase,
-        current_cards: JSON.stringify(allCards)
     });
 
     const channel = await client.channels.fetch(game.channel_id);
@@ -97,6 +94,37 @@ async function startNextPhase(gameId, phase, client) {
         content: messageContent,
         components: messageComponents,
     });
+
+    startPhaseTimer(gameId, client);
+}
+
+function startPhaseTimer(gameId, client) {
+    // Clear any existing timer for this game to be safe
+    if (activeTimers.has(gameId)) {
+        clearTimeout(activeTimers.get(gameId));
+    }
+
+    const timerId = setTimeout(() => {
+        console.log(`[Game ${gameId}] Round timer expired. Processing results.`);
+        processRoundResults(gameId, client);
+        activeTimers.delete(gameId);
+    }, ROUND_TIMER_SECONDS * 1000);
+
+    activeTimers.set(gameId, timerId);
+}
+
+async function checkAndProcessRound(gameId, client) {
+    const onBusPlayers = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' });
+    const allChosen = onBusPlayers.every(p => p.current_choice !== null);
+
+    if (onBusPlayers.length > 0 && allChosen) {
+        console.log(`[Game ${gameId}] All players have made a choice. Processing results immediately.`);
+        if (activeTimers.has(gameId)) {
+            clearTimeout(activeTimers.get(gameId));
+            activeTimers.delete(gameId);
+        }
+        await processRoundResults(gameId, client);
+    }
 }
 
 async function buildGameMessage(gameId) {
@@ -124,25 +152,25 @@ function buildGameButtons(phase, gameId) {
 
     if (phase === 'color') {
         row.addComponents(
-            new ButtonBuilder().setCustomId(`rtb_choice_red_${gameId}`).setLabel('Red').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`rtb_choice_black_${gameId}`).setLabel('Black').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_red`).setLabel('Red').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_black`).setLabel('Black').setStyle(ButtonStyle.Secondary)
         );
     } else if (phase === 'higher_lower') {
         row.addComponents(
-            new ButtonBuilder().setCustomId(`rtb_choice_higher_${gameId}`).setLabel('Higher').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`rtb_choice_lower_${gameId}`).setLabel('Lower').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_higher`).setLabel('Higher').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_lower`).setLabel('Lower').setStyle(ButtonStyle.Danger)
         );
     } else if (phase === 'inside_outside') {
         row.addComponents(
-            new ButtonBuilder().setCustomId(`rtb_choice_inside_${gameId}`).setLabel('Inside').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`rtb_choice_outside_${gameId}`).setLabel('Outside').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_inside`).setLabel('Inside').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_outside`).setLabel('Outside').setStyle(ButtonStyle.Secondary)
         );
     } else if (phase === 'suit') {
         row.addComponents(
-            new ButtonBuilder().setCustomId(`rtb_choice_hearts_${gameId}`).setLabel('♥️').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`rtb_choice_diamonds_${gameId}`).setLabel('♦️').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`rtb_choice_clubs_${gameId}`).setLabel('♣️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rtb_choice_spades_${gameId}`).setLabel('♠️').setStyle(ButtonStyle.Success)
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_hearts`).setLabel('♥️').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_diamonds`).setLabel('♦️').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_clubs`).setLabel('♣️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rtb_choice_${gameId}_spades`).setLabel('♠️').setStyle(ButtonStyle.Success)
         );
     }
     rows.push(row);
@@ -151,21 +179,23 @@ function buildGameButtons(phase, gameId) {
     const controlRow = new ActionRowBuilder();
     if (phase !== 'color') { // Can't cash out on the first round
         controlRow.addComponents(
-            new ButtonBuilder().setCustomId(`rtb_cash_out_${gameId}`).setLabel('This is my stop').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId(`rtb_cashout_${gameId}`).setLabel('This is my stop').setStyle(ButtonStyle.Primary)
         );
     }
-    controlRow.addComponents(
-        new ButtonBuilder().setCustomId(`rtb_reveal_${gameId}`).setLabel('Reveal Next Card (Host Only)').setStyle(ButtonStyle.Success)
-    );
-    rows.push(controlRow);
+
+    // Only add the control row if it has components
+    if (controlRow.components.length > 0) {
+        rows.push(controlRow);
+    }
 
 
     return rows;
 }
 
 async function handlePlayerChoice(interaction, client) {
-    const [_, action, choice, gameIdStr] = interaction.data.custom_id.split('_');
-    const gameId = parseInt(gameIdStr, 10);
+    const parts = interaction.data.custom_id.split('_');
+    const action = parts[1]; // e.g., 'choice' or 'cashout'
+    const gameId = parseInt(parts[2], 10);
     const userId = interaction.member.user.id;
 
     const game = await getBusGame(gameId);
@@ -179,84 +209,103 @@ async function handlePlayerChoice(interaction, client) {
     }
 
     if (action === 'choice') {
+        const choice = parts[3]; // e.g., 'red', 'higher'
         await updateBusGamePlayer(gameId, userId, { current_choice: choice });
+        console.log(`[Game ${gameId}] Player ${userId} chose: ${choice}`);
+        
+        // Check if all players have made their choice to proceed the game
+        checkAndProcessRound(gameId, client);
+
         return { content: `Your choice (${choice}) is locked in.`, ephemeral: true };
     }
 
-    if (action === 'cash_out') {
-        const stops = game.current_phase === 'higher_lower' ? 1 : (game.current_phase === 'inside_outside' ? 2 : 3);
+    if (action === 'cashout') {
+        let stops = 0;
+        if (game.current_phase === 'higher_lower') stops = 1;
+        else if (game.current_phase === 'inside_outside') stops = 2;
+        else if (game.current_phase === 'suit') stops = 3;
+
         await updateBusGamePlayer(gameId, userId, { player_status: 'cashed_out', stops_rode: stops });
+        console.log(`[Game ${gameId}] Player ${userId} cashed out with ${stops} stop(s).`);
         
+        // Also check if the game should proceed now that this player has cashed out
+        checkAndProcessRound(gameId, client);
+
         return { content: `You have cashed out after ${stops} stop(s).`, ephemeral: true, update_message: true };
-    }
-}
-
-async function handleHostAction(interaction, client) {
-    const [_, action, gameIdStr] = interaction.data.custom_id.split('_');
-    const gameId = parseInt(gameIdStr, 10);
-    const userId = interaction.member.user.id;
-
-    const game = await getBusGame(gameId);
-    if (!game || game.host_user_id !== userId) {
-        return { content: "Only the host can do that.", ephemeral: true };
-    }
-
-    if (action === 'reveal') {
-        await processRoundResults(gameId, client);
-        // Acknowledge the interaction immediately
-        return { type: 6 }; // DEFERRED_UPDATE_MESSAGE
     }
 }
 
 
 async function processRoundResults(gameId, client) {
+    // Ensure the timer is cleared so it doesn't run twice
+    if (activeTimers.has(gameId)) {
+        clearTimeout(activeTimers.get(gameId));
+        activeTimers.delete(gameId);
+    }
+
+    console.log(`[Game ${gameId}] Processing round results...`);
     const game = await getBusGame(gameId);
+    // If game is not active (e.g., already finished or cancelled), do nothing.
+    if (game.status !== 'active') {
+        console.log(`[Game ${gameId}] Aborting processing, game is no longer active.`);
+        return;
+    }
     const players = await getBusGamePlayers(gameId);
     const onBusPlayers = players.filter(p => p.player_status === 'on_bus');
 
+
     const deck = createDeck();
     const outcomeCard = drawCard(deck);
-    const allCards = [...game.current_cards, outcomeCard];
-    
+    console.log(`[Game ${gameId}] Revealed card: ${outcomeCard.rank} of ${outcomeCard.suit}`);
+
     for (const player of onBusPlayers) {
         let correct = false;
+        const choice = player.current_choice;
         const prevCard = game.current_cards[game.current_cards.length - 1];
-        const prevCard2 = game.current_cards[game.current_cards.length - 2];
+        const prevCard2 = game.current_cards.length > 1 ? game.current_cards[game.current_cards.length - 2] : null;
 
         switch (game.current_phase) {
             case 'color':
                 const color = (outcomeCard.suit === 'hearts' || outcomeCard.suit === 'diamonds') ? 'red' : 'black';
-                correct = player.current_choice === color;
+                correct = choice === color;
                 break;
             case 'higher_lower':
-                correct = (player.current_choice === 'higher' && outcomeCard.value > prevCard.value) ||
-                          (player.current_choice === 'lower' && outcomeCard.value < prevCard.value);
+                if (prevCard) {
+                    correct = (choice === 'higher' && outcomeCard.value > prevCard.value) ||
+                        (choice === 'lower' && outcomeCard.value < prevCard.value);
+                }
                 break;
             case 'inside_outside':
-                const min = Math.min(prevCard.value, prevCard2.value);
-                const max = Math.max(prevCard.value, prevCard2.value);
-                const isInside = outcomeCard.value > min && outcomeCard.value < max;
-                correct = (player.current_choice === 'inside' && isInside) ||
-                          (player.current_choice === 'outside' && !isInside);
+                if (prevCard && prevCard2) {
+                    const min = Math.min(prevCard.value, prevCard2.value);
+                    const max = Math.max(prevCard.value, prevCard2.value);
+                    const isInside = outcomeCard.value > min && outcomeCard.value < max;
+                    correct = (choice === 'inside' && isInside) ||
+                        (choice === 'outside' && !isInside);
+                }
                 break;
             case 'suit':
-                correct = player.current_choice === outcomeCard.suit;
+                correct = choice === outcomeCard.suit;
                 break;
         }
 
         if (correct) {
+            console.log(`[Game ${gameId}] Player ${player.user_id} was CORRECT.`);
             await updateBusGamePlayer(gameId, player.user_id, { stops_rode: player.stops_rode + 1, current_choice: null });
         } else {
+            console.log(`[Game ${gameId}] Player ${player.user_id} was INCORRECT or did not choose.`);
             await updateBusGamePlayer(gameId, player.user_id, { player_status: 'dead_in_road', current_choice: null });
         }
     }
 
+    // Add the revealed card to the sequence
+    const allCards = [...game.current_cards, outcomeCard];
     await updateBusGame(gameId, { current_cards: JSON.stringify(allCards) });
 
     const nextPhase = Phases[game.current_phase].next;
-    const stillOnBus = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' });
+    const stillOnBus = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' }).first();
 
-    if (!nextPhase || stillOnBus.length === 0) {
+    if (!nextPhase || !stillOnBus) {
         await endGame(gameId, client);
     } else {
         await startNextPhase(gameId, nextPhase, client);
@@ -264,7 +313,13 @@ async function processRoundResults(gameId, client) {
 }
 
 async function endGame(gameId, client) {
-    console.log(`Ending game ${gameId}`);
+    // Ensure the timer is cleared
+    if (activeTimers.has(gameId)) {
+        clearTimeout(activeTimers.get(gameId));
+        activeTimers.delete(gameId);
+    }
+
+    console.log(`[Game ${gameId}] Ending game...`);
     await updateBusGame(gameId, { status: 'finished' });
     const game = await getBusGame(gameId);
     const players = await getBusGamePlayers(gameId);
@@ -295,7 +350,7 @@ async function endGame(gameId, client) {
         }
         summary += '\n';
     }
-    
+
     if (dead.length > 0) {
         summary += `**Dead in the road (${dead.length}):**\n`;
         for (const player of dead) {
@@ -313,6 +368,5 @@ async function endGame(gameId, client) {
 module.exports = {
     startJoinTimer,
     handlePlayerChoice,
-    handleHostAction,
     buildGameMessage,
 };
