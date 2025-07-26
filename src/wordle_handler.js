@@ -11,6 +11,14 @@ const REWARD_STRUCTURE = {
 const CHEAT_PENALTY = 5;
 const CHEAT_CHANCE = 0.2;
 
+const CHEATER_EMOJIS = ['🕵️', '🚔', '🚨', '👮', '⚖️', '🧐', '👀', '🤨'];
+const WINNER_EMOJIS = ['🎉', '🥳', '🎊', '✨', '🏆', '🥇', '💯', '🙌'];
+const UNSOLVED_EMOJIS = ['🧐', '🤔', '🤦', '😿', '<:oopskips:707287012054663231>'];
+
+function getRandomEmoji(emojiList) {
+    return emojiList[Math.floor(Math.random() * emojiList.length)];
+}
+
 async function handleWordleMessage(message) {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
@@ -34,39 +42,58 @@ async function handleWordleMessage(message) {
         return;
     }
 
-    // 3. Process each user's result
-    const reportLines = [];
+    // 3. Process each user's result and group them
+    const winners = [];
+    const unsolved = [];
+    const cheaters = [];
+
     for (const userId in results) {
         const { tries } = results[userId];
         const isCheater = Math.random() < CHEAT_CHANCE;
 
         let finalAmount = 0;
         let transactionType = '';
-        let reportString = '';
         let finalTries = tries;
 
         if (isCheater) {
             finalAmount = -CHEAT_PENALTY;
             transactionType = 'wordle_cheat_fine';
-            reportString = `🕵️ <@${userId}> was caught trying to cheat the Wordle and has been fined ${CHEAT_PENALTY} GC!`;
+            cheaters.push(userId);
         } else if (tries) { // Solved
             finalAmount = REWARD_STRUCTURE[tries] || 0;
             transactionType = 'wordle_reward';
-            reportString = `🎉 <@${userId}> solved the Wordle in ${tries} tries and gets ${finalAmount} GC!`;
+            winners.push({ userId, tries, finalAmount });
         } else { // Unsolved (X/6)
             finalAmount = 0;
             finalTries = 10; // Set tries to 10 for unsolved
             transactionType = 'wordle_unsolved';
-            reportString = `🧐 <@${userId}> didn't solve the Wordle today. Better luck next time!`;
+            unsolved.push(userId);
         }
 
         // Always record the event in the database
         await processWordleTransaction(userId, finalTries, finalAmount, isCheater, transactionType);
-        
-        reportLines.push(reportString);
     }
 
-    // 4. Send the public report
+    // 4. Construct the public report
+    const reportLines = [];
+    // Winners get individual lines
+    winners.forEach(winner => {
+        reportLines.push(`${getRandomEmoji(WINNER_EMOJIS)} <@${winner.userId}> solved the Wordle in ${winner.tries} tries and gets ${winner.finalAmount} GC`);
+    });
+
+    // Unsolved are grouped
+    if (unsolved.length > 0) {
+        const userMentions = unsolved.map(id => `<@${id}>`).join(', ');
+        reportLines.push(`${getRandomEmoji(UNSOLVED_EMOJIS)} The following users didn't solve the Wordle today: ${userMentions}`);
+    }
+
+    // Cheaters are grouped
+    if (cheaters.length > 0) {
+        const userMentions = cheaters.map(id => `<@${id}>`).join(', ');
+        reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} The following users were caught cheating by GarrycOinTuringCHeatAudit (GOTCHA) and have been fined ${CHEAT_PENALTY} GC: ${userMentions}`);
+    }
+
+    // 5. Send the public report
     if (reportLines.length > 0) {
         await message.channel.send(reportLines.join('\n'));
     }
