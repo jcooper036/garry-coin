@@ -4,6 +4,7 @@ const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { findOrCreateUser, transfer, updateUserActivity, getUser } = require('./db');
+const { handleRideTheBusButtonInteraction } = require('./commands/games/ride_the_bus/ridethebus_methods');
 const fs = require('fs');
 const path = require('path');
 
@@ -126,7 +127,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const targetUser = await getUser(targetId);
         if (targetUser && targetUser.last_active_at) {
           const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
-          
+
           const minChance = 0.33;
           const maxChance = 0.90;
           const minDays = 2;
