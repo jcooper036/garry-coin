@@ -93,4 +93,86 @@ module.exports = {
   updateUserActivity,
   getRandomActiveUser,
   getUser,
+  // Ride the Bus
+  createBusGame,
+  getBusGame,
+  getActiveBusGame,
+  updateBusGame,
+  addPlayerToBusGame,
+  getBusGamePlayers,
+  updateBusGamePlayer,
+  getBusGamePlayer,
+  cancelBusGame,
 };
+
+// --- Ride the Bus Functions ---
+
+async function createBusGame(hostId, channelId, messageId, wager) {
+  return db.transaction(async trx => {
+    const [game] = await trx('bus_games').insert({
+      host_user_id: hostId,
+      channel_id: channelId,
+      message_id: messageId,
+      wager: wager,
+      status: 'waiting_for_players',
+      current_phase: 'joining',
+    }).returning('*');
+
+    await trx('bus_game_players').insert({
+      game_id: game.id,
+      user_id: hostId,
+    });
+
+    console.log(`Created new bus game with ID: ${game.id} by host: ${hostId}`);
+    return game;
+  });
+}
+
+async function getBusGame(gameId) {
+  return db('bus_games').where({ id: gameId }).first();
+}
+
+async function getActiveBusGame() {
+  return db('bus_games')
+    .whereIn('status', ['waiting_for_players', 'active'])
+    .first();
+}
+
+async function updateBusGame(gameId, updates) {
+  return db('bus_games').where({ id: gameId }).update(updates);
+}
+
+async function addPlayerToBusGame(gameId, userId) {
+  // First, check if the player is already in the game to avoid violating the unique constraint.
+  const existingPlayer = await db('bus_game_players').where({ game_id: gameId, user_id: userId }).first();
+  if (existingPlayer) {
+    console.log(`User ${userId} is already in game ${gameId}.`);
+    return { success: false, message: 'already_joined' };
+  }
+
+  await db('bus_game_players').insert({
+    game_id: gameId,
+    user_id: userId,
+  });
+
+  console.log(`Added player ${userId} to game ${gameId}`);
+  return { success: true };
+}
+
+async function getBusGamePlayers(gameId) {
+  return db('bus_game_players').where({ game_id: gameId });
+}
+
+async function updateBusGamePlayer(gameId, userId, updates) {
+  return db('bus_game_players')
+    .where({ game_id: gameId, user_id: userId })
+    .update(updates);
+}
+
+async function getBusGamePlayer(gameId, userId) {
+  return db('bus_game_players').where({ game_id: gameId, user_id: userId }).first();
+}
+
+async function cancelBusGame(gameId) {
+  return db('bus_games').where({ id: gameId }).update({ status: 'cancelled' });
+}

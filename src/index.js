@@ -3,12 +3,14 @@ const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
-const { findOrCreateUser, transfer, updateUserActivity, getUser } = require('./db');
+const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers } = require('./db');
+const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 
 const PUBLIC_KEY = process.env.PUBLIC_KEY;
 
@@ -43,6 +45,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
+  const fetch = (await import('node-fetch')).default;
   const { type, id, data } = req.body;
 
   if (type === InteractionType.PING) {
@@ -89,6 +92,44 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     if (commands.has(name)) {
       const command = commands.get(name);
       const response = await command.execute(req.body, client);
+
+      // Special post-processing for Ride the Bus game creation
+      if (response.postProcess === 'create_bus_game') {
+        // Instead of res.send, we manually handle the interaction response
+        // to get the message ID for game creation.
+
+        // Acknowledge the interaction to prevent timeout.
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        const transferResult = await transfer(response.hostId, client.user.id, response.wager, 'rtb_wager');
+        if (!transferResult.success) {
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: "Failed to transfer wager. The bus drove off." }),
+          });
+          return;
+        }
+
+        const messagePayload = {
+          embeds: response.embeds,
+          components: response.components,
+        };
+
+        const messageResponse = await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(messagePayload),
+        });
+
+        const messageData = await messageResponse.json();
+
+        const game = await createBusGame(response.hostId, channel_id, messageData.id, response.wager);
+        startJoinTimer(game.id, client, response.boardingTime);
+        return;
+      }
+
+
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -102,75 +143,165 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
   if (type === InteractionType.MESSAGE_COMPONENT) {
     const { custom_id } = data;
-    const [game, choice, wagerStr, targetId] = custom_id.split('_');
-    const wager = parseInt(wagerStr, 10);
     const playerId = req.body.member.user.id;
 
-    // The original interaction contains the ID of the user who initiated the command.
-    // We check to make sure the person clicking the button is the one who started the heist.
-    if (req.body.message.interaction.user.id !== playerId) {
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: "This isn't your heist! Start your own with `/heist`.",
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      });
-    }
+    // --- Ride the Bus Button Handling ---
+    if (custom_id.startsWith('rtb_')) {
+      const parts = custom_id.split('_');
+      const action = parts[1];
 
-    if (game === 'heist') {
-      let successChance = 0.5; // Default 50% chance for the bot
-      const botId = client.user.id;
+      if (action === 'join' || action === 'cancel') {
+        // This logic is for the initial buttons that don't have a gameId.
+        const game = await getActiveBusGame();
+        if (!game) return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "This game is no longer active.", flags: InteractionResponseFlags.EPHEMERAL } });
 
-      if (targetId !== botId) {
-        const targetUser = await getUser(targetId);
-        if (targetUser && targetUser.last_active_at) {
-          const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
-          
-          const minChance = 0.33;
-          const maxChance = 0.90;
-          const minDays = 2;
-          const maxDays = 14;
-
-          if (daysInactive <= minDays) {
-            successChance = minChance;
-          } else if (daysInactive >= maxDays) {
-            successChance = maxChance;
-          } else {
-            const slope = (maxChance - minChance) / (maxDays - minDays);
-            successChance = minChance + (slope * (daysInactive - minDays));
+        if (action === 'join') {
+          const playerUser = await getUser(playerId);
+          if (!playerUser || playerUser.balance < game.wager) {
+            return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `You're too poor for this bus. You only have ${playerUser?.balance || 0} GC.`, flags: InteractionResponseFlags.EPHEMERAL } });
           }
+
+          const transferResult = await transfer(playerId, client.user.id, game.wager, 'rtb_wager');
+          if (!transferResult.success) {
+            return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `Failed to pay fare: ${transferResult.message}`, flags: InteractionResponseFlags.EPHEMERAL } });
+          }
+
+          const addResult = await addPlayerToBusGame(game.id, playerId);
+          if (!addResult.success && addResult.message === 'already_joined') {
+            // Refund the user if they somehow clicked join twice
+            await grant(playerId, game.wager, 'rtb_refund_duplicate_join');
+            return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "You are already on the bus!", flags: InteractionResponseFlags.EPHEMERAL } });
+          }
+
+          const gameEmbed = await buildGameEmbed(game.id);
+
+          // Acknowledge interaction, then edit message
+          res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embeds: [gameEmbed], components: req.body.message.components }),
+          });
+          return;
+        } else { // cancel
+          if (game.host_user_id !== playerId) return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "Only the host can cancel the bus.", flags: InteractionResponseFlags.EPHEMERAL } });
+
+          await cancelBusGame(game.id);
+          const players = await getBusGamePlayers(game.id);
+          for (const player of players) {
+            await grant(player.user_id, game.wager, 'rtb_refund_cancel');
+          }
+
+          const cancelledEmbed = await buildGameEmbed(game.id);
+
+          res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embeds: [cancelledEmbed], components: [] }),
+          });
+          return;
         }
+      } else if (action === 'choice' || action === 'cashout') {
+        const gameId = parseInt(parts[2], 10);
+        const response = await handlePlayerChoice(req.body, client);
+        if (response.update_message) {
+          const gameEmbed = await buildGameEmbed(gameId);
+
+          // We can't send an ephemeral and update the message in one go.
+          // So we'll update the message, and then send a new ephemeral follow-up.
+          res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embeds: [gameEmbed], components: req.body.message.components }),
+          });
+
+          // Send the ephemeral follow-up
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: response.content, flags: 64 }), // 64 for EPHEMERAL
+          });
+
+        } else {
+          return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { ...response, flags: InteractionResponseFlags.EPHEMERAL } });
+        }
+        return;
       }
-
-      const win = Math.random() < successChance;
-      let resultMessage = '';
-
-      if (win) {
-        await transfer(targetId, playerId, wager, 'heist_win');
-        resultMessage = `Success! <@${playerId}> cut the ${choice} wire and pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>! (Chance: ${Math.round(successChance * 100)}%)`;
-      } else {
-        await transfer(playerId, targetId, wager, 'heist_loss');
-        resultMessage = `LMAO <@${playerId}> cut the wrong wire and got caught, losing ${wager} GarryCoins to <@${targetId}>`;
-      }
-
-      // Disable buttons on the original message
-      const originalMessage = req.body.message;
-      const disabledComponents = originalMessage.components.map(row => {
-        row.components.forEach(component => component.disabled = true);
-        return row;
-      });
-
-      return res.send({
-        type: InteractionResponseType.UPDATE_MESSAGE,
-        data: {
-          content: resultMessage,
-          components: disabledComponents,
-        },
-      });
     }
   }
-});
+
+
+  // --- Heist Button Handling ---
+  const [game, choice, wagerStr, targetId] = custom_id.split('_');
+  const wager = parseInt(wagerStr, 10);
+
+  // The original interaction contains the ID of the user who initiated the command.
+  // We check to make sure the person clicking the button is the one who started the heist.
+  if (req.body.message.interaction.user.id !== playerId) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: "This isn't your heist! Start your own with `/heist`.",
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
+    });
+  }
+  if (game === 'heist') {
+    let successChance = 0.5; // Default 50% chance for the bot
+    const botId = client.user.id;
+
+    if (targetId !== botId) {
+      const targetUser = await getUser(targetId);
+      if (targetUser && targetUser.last_active_at) {
+        const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
+
+        const minChance = 0.33;
+        const maxChance = 0.90;
+        const minDays = 2;
+        const maxDays = 14;
+
+        if (daysInactive <= minDays) {
+          successChance = minChance;
+        } else if (daysInactive >= maxDays) {
+          successChance = maxChance;
+        } else {
+          const slope = (maxChance - minChance) / (maxDays - minDays);
+          successChance = minChance + (slope * (daysInactive - minDays));
+        }
+      }
+    }
+
+    const win = Math.random() < successChance;
+    let resultMessage = '';
+
+    if (win) {
+      await transfer(targetId, playerId, wager, 'heist_win');
+      resultMessage = `Success! <@${playerId}> cut the ${choice} wire and pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>! (Chance: ${Math.round(successChance * 100)}%)`;
+    } else {
+      await transfer(playerId, targetId, wager, 'heist_loss');
+      resultMessage = `LMAO <@${playerId}> cut the wrong wire and got caught, losing ${wager} GarryCoins to <@${targetId}>`;
+    }
+
+    // Disable buttons on the original message
+    const originalMessage = req.body.message;
+    const disabledComponents = originalMessage.components.map(row => {
+      row.components.forEach(component => component.disabled = true);
+      return row;
+    });
+
+    return res.send({
+      type: InteractionResponseType.UPDATE_MESSAGE,
+      data: {
+        content: resultMessage,
+        components: disabledComponents,
+      },
+    });
+  }
+}
+);
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);

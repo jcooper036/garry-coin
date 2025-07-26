@@ -110,6 +110,24 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garryridethebus',
+    description: 'Start a game of Ride the Bus.',
+    options: [
+      {
+        name: 'wager',
+        description: 'The amount of GarryCoins to wager.',
+        type: 4, // INTEGER type
+        required: true,
+      },
+      {
+        name: 'boarding_time',
+        description: 'The time in seconds for players to join the bus (default: 30).',
+        type: 4, // INTEGER type
+        required: false,
+      },
+    ],
   }
 ];
 
