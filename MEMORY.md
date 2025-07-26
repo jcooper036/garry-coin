@@ -192,3 +192,17 @@ This session focused on improving the lottery system and adding advanced feature
 - **Bug Fixing**:
     - Resolved a `TypeError` in the `/heist` command caused by an incorrect function signature in `src/commands/games/heist.js`.
     - Addressed a recurring Docker daemon error when running database migrations.
+
+
+# 2025-07-26 Session Summary
+
+This session focused on implementing a new Wordle rewards feature. Key aspects included:
+
+- **Feature Planning**: Developed a detailed plan for a Wordle rewards system, including parsing messages, rewarding users, detecting cheating, and reporting.
+- **Database Schema**: Decided to add a new `wordle_rewards` table to track daily Wordle participation, scores, and reward details for idempotency and historical data.
+- **Core Logic (`src/wordle_handler.js`)**: Implemented the main logic for parsing Wordle bot messages, calculating rewards based on tries, applying a random "cheat detection" mechanism (GarrycOinTuringCHeatAudit - GOTCHA), and handling database transactions for rewards and penalties.
+- **Bot Integration (`src/bot.js`)**: Integrated the Wordle handler into the `messageCreate` listener. Implemented a system to verify messages come from approved Wordle bot IDs (configurable via `WORDLE_BOT_IDS` environment variable) and to penalize users attempting to spoof Wordle results with an "attempted_hacking" transaction.
+- **Reporting Refinement**: Enhanced the public report message to group users by outcome: individual lines for winners (batched by number of tries), a single line for all unsolved players, and a single line for all caught cheaters.
+- **Dynamic Messaging**: Added random emojis to the report messages for each outcome type (winner, unsolved, cheater) to make them more engaging. Discussed how to incorporate custom Discord emojis.
+- **Parsing Fixes**: Corrected the message parsing logic to properly extract user IDs from Discord's `<@USER_ID>` mention format.
+- **Unsolved Handling**: Ensured that users who don't solve the Wordle (X/6) are still recorded in the `wordle_rewards` table with 10 tries.

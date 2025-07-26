@@ -13,6 +13,13 @@
 # sacred - do not alter these files unless explicitly instructed to do so (you may read them though)
 - docker-compose.yml
 
+# planning
+Planning should be done as a synthesis with the user. To prevent you or the user from cheating
+- write your pans to `docs/ai_plan`, with a markdown doc that has the feature or issue name.
+- then ask the user to describe their plan. ask the user their level of familiarity with the subject on a scale of 1-5 (1 know nothing, 2 novice, 3 some working familiarity, 4 decent experience, 5 expert)
+- consider the similarities and differences between the two plans. Neither of you is assumed to be more correct. You are considered to be a 4 on the scale that you asked the user to provide, and weigh your answers accordingly
+The point of this approach is to come to synthesis between you and the user.
+
 
 # Project hygene
 - Use TODO.md to track issues and features. This is to help you and your human handler.
@@ -53,3 +60,8 @@ When troubleshooting, before stating that a specific line of code or file conten
 Did not thoroughly check the database schema (migration files) before writing code that interacts with the database, leading to a column name mismatch.
 ### What to do instead
 When interacting with a database, always consult the relevant migration files or schema definitions to ensure correct column names and data structures are used. If there's any doubt, read the migration files first. Refrain from changing the databse unless explicity told to do so - change functions that interact with the database to match the database instead.
+
+## running migrations
+I should not suggest running migrations myself, i.e. `npx knex migrate:latest`
+### What to do instead
+Let the user an/or other systems handle this. In development, the migrations are run when the user runs `docker compose up --build` to start the test bot, server, and database. In prod, this is handled by CI/CD. I should suggest to the user that they are all good to start / restart docker compose to run the migrations.

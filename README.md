@@ -27,12 +27,39 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 - `/garryhistory @user` - (public) Shows the last 10 transactions for the stated user. By default this is the user making the request.
 - `/garrysend X @user` - (public) Sends X GarryCoins to the target user publicly.
 
-## Future Ideas
+
+# Roadmap
+
+## v1 - Targeted 2025-08-01
+### In progress
+#### Features
+- ride the bus
+- wavelength game
+
+#### Backend
+- database tables for storing game data
+
+### Completed
+#### Features
+- wordle rewards
+
+### Backend
+- migrated db from Render DB (free tier ending) to Supabase (free tier)
+
+## v0 GC Release 2025-07-04
+- Discord bot
+- backend database
+- slash commands
+- cut the wire game
+- coin sharing 
+
+
+# Future Ideas
+- **Shop:** A server-specific "shop" where users can spend coins on cosmetic roles or other server perks defined by the server admins.
 - **Gambling:** Add mini-games (like dice rolls or coin flips) where users can gamble their GarryCoins.
 - **Leaderboards:** A server-wide or global leaderboard of the richest users.
-- **Shop:** A server-specific "shop" where users can spend coins on cosmetic roles or other server perks defined by the server admins.
 
-## Development
+# Development
 If all is working, you should be able to go to discord and run the /test command for the bot on any server it's deployed on.
 
 There is both the prod bot (garrycoin_bot) and the test bot (test-garrycoin_bot). Obviously one of those is used for testing, the other is the real thing. Their configurations are managed via the discord web UI.
