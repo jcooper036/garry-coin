@@ -8,6 +8,7 @@ This plan combines the user's high-level strategy with the AI's detailed impleme
     - We should allow for an array of "approved_ids", which will help with testing (since we don't have the wordle bot in our testing server). practically, this will be just the wordle bot and a user that we designate for testing
     - I want people to be punished if they are not on the approved list and try to do this. If we detect any other user doing this, we should make a public message that calls them out for cheating, and subtracts 10 GC from their account. The transaction type for this is "attempted_hacking", and we don't need to track it other than the transaction table. This will be as a transfer to the GarryCoin bot from that users account
 - It will then check if the message content matches the Wordle results template (e.g., starts with `Your group is on a`).
+- **Configuration**: We will add a `WORDLE_BOT_IDS` variable to our `.env` file to store a comma-separated list of approved user/bot IDs.
 
 ## 2. Idempotency & History (Database)
 - We'll create a new database migration for a `wordle_rewards` table. This table will track daily rewards and prevent duplicates.
