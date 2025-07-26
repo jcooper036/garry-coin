@@ -1,6 +1,9 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { transfer, grant, updateUserActivity, getRandomActiveUser } = require('./db');
+const { handleWordleMessage } = require('./wordle_handler');
+
+const WORDLE_BOT_IDS = (process.env.WORDLE_BOT_IDS || '').split(',');
 
 const client = new Client({
   intents: [
@@ -71,6 +74,42 @@ let lastGrantedTime = 0;
 const COOLDOWN_PERIOD = 60 * 1000; // 1 minute
 
 client.on('messageCreate', async message => {
+  // Wordle logic
+  if (message.content.startsWith('Your group is on a')) {
+    if (WORDLE_BOT_IDS.includes(message.author.id)) {
+      // Legitimate Wordle message
+      try {
+        await handleWordleMessage(message);
+      } catch (error) {
+        console.error('Error handling Wordle message:', error);
+      }
+    } else {
+      // Illegitimate Wordle message (spoof attempt)
+      const senderId = message.author.id;
+      const botId = client.user.id;
+      
+      // Don't let the bot punish itself if something is misconfigured
+      if (senderId === botId) return;
+
+      console.log(`User ${senderId} tried to spoof a Wordle message.`);
+      
+      // Publicly shame the user
+      await message.channel.send(`Hey <@${senderId}>, nice try. Only the real Wordle bot can post results. I'm taking 10 GarryCoins for that.`);
+      
+      // Penalize the user
+      const result = await transfer(senderId, botId, 10, 'attempted_hacking');
+      if (result.success) {
+        console.log(`Successfully penalized ${senderId} 10 GarryCoins for spoofing.`);
+      } else {
+        console.log(`Failed to penalize ${senderId}: ${result.message}`);
+        if (result.message === 'insufficient_funds') {
+            await message.channel.send(`...but you're too poor, so I'll let it slide. For now.`);
+        }
+      }
+    }
+    return; // Stop further processing
+  }
+
   if (message.author.bot) return; // Ignore bots
 
   // Update user's activity timestamp

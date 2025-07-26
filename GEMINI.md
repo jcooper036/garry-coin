@@ -60,3 +60,8 @@ When troubleshooting, before stating that a specific line of code or file conten
 Did not thoroughly check the database schema (migration files) before writing code that interacts with the database, leading to a column name mismatch.
 ### What to do instead
 When interacting with a database, always consult the relevant migration files or schema definitions to ensure correct column names and data structures are used. If there's any doubt, read the migration files first. Refrain from changing the databse unless explicity told to do so - change functions that interact with the database to match the database instead.
+
+## running migrations
+I should not suggest running migrations myself, i.e. `npx knex migrate:latest`
+### What to do instead
+Let the user an/or other systems handle this. In development, the migrations are run when the user runs `docker compose up --build` to start the test bot, server, and database. In prod, this is handled by CI/CD. I should suggest to the user that they are all good to start / restart docker compose to run the migrations.
