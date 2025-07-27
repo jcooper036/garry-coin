@@ -235,6 +235,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const players = await getWavelengthPlayers(game.id);
         const originalEmbed = req.body.message.embeds[0];
         originalEmbed.fields[2].value = players.length.toString();
+        originalEmbed.fields[3].value = players.map(p => `<@${p.user_id}>`).join('\n') || 'No one yet!';
 
         const guessButtons1 = new ActionRowBuilder();
         for (let i = -3; i <= 0; i++) {
@@ -434,9 +435,10 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         fields: [
           { name: 'Scale', value: `**(-3) ${scale.scale_left}** ↔️ **${scale.scale_right} (3)**` },
           { name: 'Host\'s Word', value: `**${hostWord}**` },
-          { name: 'Players Joined', value: '0', inline: true },
+          { name: 'Players Joined', value: '1', inline: true },
+          { name: 'Players', value: 'No one yet!', inline: true }
         ],
-        footer: { text: 'Game will end in 10 minutes.' },
+        footer: { text: 'Game will end in 10 minutes.' }
       };
 
       const row = new ActionRowBuilder()

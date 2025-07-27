@@ -16,9 +16,9 @@ module.exports = {
 
         const hostId = interaction.member.user.id;
 
-        if (wager <= 0) {
+        if (wager < 2) {
             return {
-                content: 'You must wager a positive amount of GarryCoins.',
+                content: 'The minimum wager is 2 GarryCoins.',
                 ephemeral: true,
             };
         }
