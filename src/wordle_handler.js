@@ -11,9 +11,9 @@ const REWARD_STRUCTURE = {
 const CHEAT_PENALTY = 4;
 const CHEAT_CHANCE = 0.2;
 
-const CHEATER_EMOJIS = ['🕵️', '🚔', '🚨', '👮', '⚖️', '🧐', '👀', '🤨'];
-const WINNER_EMOJIS = ['🎉', '🥳', '🎊', '✨', '🏆', '🥇', '💯', '🙌'];
-const UNSOLVED_EMOJIS = ['🧐', '🤔', '🤦', '😿', '<:oopskips:707287012054663231>'];
+const CHEATER_EMOJIS = ['<:scumbagcharles:707302898869993523>', '🚔', '🚨', '👮', '⚖️', '<:urfuckendeadkiddo:706647683183411362>', '<:buaGarry:705932743158005771>', '<:megacoop:707305419348901919>', '🙅‍♂️'];
+const WINNER_EMOJIS = ['<:garryhulkhands:712745242272464966>', '<:hellya:707655186423742514>', '🎊', '✨', '🏆', '👑', '<:HereForTheWholeFoodsPizza:712742427001356370>', '<:WhenSheTastesLikeGolf:707671469328564235>', '<:supgirl:706640451524100148>', '<:pewpew:707669761969881172>', '☑️', '😎', '✨', '🎰'];
+const UNSOLVED_EMOJIS = ['<:whengarrymissesthecannonminion:707799305892790412>', '<:jacobmid:707672458127474710>', '<:slowgarry:707668416281968700>', '😿', '<:oopskips:707287012054663231>', '<:killme:707447664748527627>', '🇫', '🦽', '🚑', '🤡'];
 
 function getRandomEmoji(emojiList) {
     return emojiList[Math.floor(Math.random() * emojiList.length)];
@@ -83,19 +83,19 @@ async function handleWordleMessage(message) {
     for (const tries in winnersByTries) {
         const userMentions = winnersByTries[tries].map(id => `<@${id}>`).join(', ');
         const reward = REWARD_STRUCTURE[tries] || 0;
-        reportLines.push(`${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${reward} GC: ${userMentions}`);
+        reportLines.push(`${userMentions} ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${reward} GC`);
     }
 
     // Unsolved are grouped
     if (unsolved.length > 0) {
         const userMentions = unsolved.map(id => `<@${id}>`).join(', ');
-        reportLines.push(`${getRandomEmoji(UNSOLVED_EMOJIS)} knew too many words today: ${userMentions}`);
+        reportLines.push(`${userMentions} ${getRandomEmoji(UNSOLVED_EMOJIS)} knew too many words today`);
     }
 
     // Cheaters are grouped
     if (cheaters.length > 0) {
         const userMentions = cheaters.map(id => `<@${id}>`).join(', ');
-        reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offenders have been finded ${CHEAT_PENALTY} GC: ${userMentions}`);
+        reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} ${userMentions}  Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offenders have been finded ${CHEAT_PENALTY} GC`);
     }
 
     // 5. Send the public report
