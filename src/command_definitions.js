@@ -128,6 +128,28 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garrywavelength',
+    description: 'Start a game of Wavelength.',
+    options: [
+      {
+        name: 'wager',
+        description: 'The amount of GarryCoins to wager.',
+        type: 4, // INTEGER type
+        required: true,
+      },
+      {
+        name: 'show_player_guesses',
+        description: 'Show player guesses to everyone (default: false).',
+        type: 5, // BOOLEAN type
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'garrywavelengthhelp',
+    description: 'Explains how to play the Wavelength game.',
   }
 ];
 

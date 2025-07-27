@@ -19,6 +19,7 @@ services:
       - GITHUB_REPO_NAME=${GITHUB_REPO_NAME}
     volumes:
       - ./src:/usr/src/app/src
+      - ./assets:/usr/src/app/assets
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
@@ -36,6 +37,7 @@ services:
       - DB_NAME=${POSTGRES_DB}
     volumes:
       - ./src:/usr/src/app/src
+      - ./assets:/usr/src/app/assets
     restart: unless-stopped
     command: npm run dev-bot
 
