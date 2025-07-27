@@ -236,13 +236,23 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const originalEmbed = req.body.message.embeds[0];
         originalEmbed.fields[2].value = players.length.toString();
 
-        const guessRow = new ActionRowBuilder();
-        for (let i = -3; i <= 3; i++) {
-          guessRow.addComponents(
+        const guessButtons1 = new ActionRowBuilder();
+        for (let i = -3; i <= 0; i++) {
+          guessButtons1.addComponents(
             new ButtonBuilder()
               .setCustomId(`wl_guess_${game.id}_${i}`)
               .setLabel(i.toString())
-              .setStyle(ButtonStyle.Primary),
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        const guessButtons2 = new ActionRowBuilder();
+        for (let i = 1; i <= 3; i++) {
+          guessButtons2.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`wl_guess_${game.id}_${i}`)
+              .setLabel(i.toString())
+              .setStyle(ButtonStyle.Primary)
           );
         }
 
@@ -259,7 +269,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             content: "You've joined the game! Make your guess:",
-            components: [guessRow],
+            components: [guessButtons1, guessButtons2],
             flags: InteractionResponseFlags.EPHEMERAL
           }),
         });
