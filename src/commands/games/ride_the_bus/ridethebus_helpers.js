@@ -370,25 +370,23 @@ async function endGame(gameId, client) {
         summary += '\n';
     }
 
-    // if (cashedOut.length > 0) {
-    //     summary += `**💰 Cashed Out (${cashedOut.length}):**\n`;
-    //     for (const player of cashedOut) {
-    //         const winnings = game.wager * Payouts[player.stops_rode];
-    //         console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
-    //         await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
-    //         summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
-    //     }
-    //     summary += '\n';
-    // }
+    if (cashedOut.length > 0) {
+        // summary += `**💰 Cashed Out (${cashedOut.length}):**\n`;
+        for (const player of cashedOut) {
+            const winnings = game.wager * Payouts[player.stops_rode];
+            console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
+            await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
+            summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
+        }
+        summary += '\n';
+    }
 
-    // if (dead.length > 0) {
-    //     summary += `**💀 Dead in the Road (${dead.length}):**\n`;
-    //     for (const player of dead) {
-    //         console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
-    //         // Wager was already taken at the start, so no transaction needed.
-    //         summary += `<@${player.user_id}> lost their **${game.wager} GC** fare.\n`;
-    //     }
-    // }
+    if (dead.length > 0) {
+        // summary += `**💀 Dead in the Road (${dead.length}):**\n`;
+        for (const player of dead) {
+            console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
+        }
+    }
 
     console.log(`[Game ${gameId}] Sending final message.`);
     const channel = await client.channels.fetch(game.channel_id);
