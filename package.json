@@ -1,6 +1,6 @@
 {
   "name": "garry-coin",
-  "version": "1.0.0",
+  "version": "2.beta.0.0",
   "description": "GarryCoin Discord Bot",
   "main": "src/index.js",
   "scripts": {

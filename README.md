@@ -30,23 +30,18 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 
 # Roadmap
 
-## v1 - Targeted 2025-08-01
-### In progress
-#### Features
-- wavelength game
-
-#### Backend
-- database tables for storing game data
-
+## 2.beta.0.0 - 2025-07-27
 ### Completed
 #### Features
 - wordle rewards
 - ride the bus
+- wavelength game
 
 ### Backend
 - migrated db from Render DB (free tier ending) to Supabase (free tier)
+- database tables for storing game data
 
-## v0 GC Release 2025-07-04
+## 1.0.0 GC Release 2025-07-04
 - Discord bot
 - backend database
 - slash commands
