@@ -146,6 +146,10 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garrywavelengthhelp',
+    description: 'Explains how to play the Wavelength game.',
   }
 ];
 
