@@ -73,6 +73,7 @@ Stores the state of each player within a game.
         - Send the initial public game message with the scale, host's word, and a `[Join Game]` button.
         - Start a 10-minute timer for the game to automatically end if not revealed by the host.
     2. When the game starts, the host is give the scale (with each end) and a number. They are only coming up with a response. Phrase it as a prompt "On a scale of -3 being worst 5 movies of all time and 3 being best 5 movies, what move would you rate a 2"?
+    3. The scale ends come from `assets/wavelength_scales.json`. Randomly pick a number from -3 to 3.
 
 ### 3. Player Joining
 - **File:** `src/index.js` (handle button interaction)
