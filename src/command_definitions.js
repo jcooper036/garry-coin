@@ -150,6 +150,10 @@ const commands = [
   {
     name: 'garrywavelengthhelp',
     description: 'Explains how to play the Wavelength game.',
+  },
+  {
+    name: 'garryridethebushelp',
+    description: 'Explains how to play the Ride the Bus game.',
   }
 ];
 
