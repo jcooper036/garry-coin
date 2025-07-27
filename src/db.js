@@ -204,12 +204,6 @@ async function createWavelengthGame(hostId, channelId, messageId, wager, scaleLe
       show_player_guesses: showPlayerGuesses,
     }).returning('*');
 
-    await trx('wavelength_players').insert({
-      game_id: game.id,
-      user_id: hostId,
-      player_status: 'joined',
-    });
-
     console.log(`Created new Wavelength game with ID: ${game.id} by host: ${hostId}`);
     return game;
   });

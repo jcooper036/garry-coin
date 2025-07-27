@@ -22,32 +22,47 @@ async function endWavelengthGame(gameId, client) {
         activeTimers.delete(gameId);
     }
 
-    console.log(`[Game ${gameId}] Ending Wavelength game...`);
     await updateWavelengthGame(gameId, { status: 'finished' });
     const game = await getWavelengthGame(gameId);
     const players = await getWavelengthPlayers(gameId);
 
-    const winners = players.filter(p => p.guess === game.target_number);
-    const winnerIds = winners.map(p => p.user_id);
-    if (!winnerIds.includes(game.host_user_id)) {
-        winners.push({ user_id: game.host_user_id }); // Add host to winners if they are not already there
+    console.log(`[Game ${gameId}] Ending Wavelength game...`);
+    console.log(`[Game ${gameId}] Host: ${game.host_user_id}`);
+    console.log(`[Game ${gameId}] Target: ${game.target_number}`);
+    console.log(`[Game ${gameId}] Word: ${game.host_word}`);
+    console.log(`[Game ${gameId}] Players (${players.length}):`, players.map(p => ({ id: p.user_id, guess: p.guess })));
+
+
+    const correctGuessers = players.filter(p => p.guess === game.target_number);
+    const pot = (players.length + 1) * game.wager; // +1 for the host's wager
+
+    let winners = [];
+    let winnings = 0;
+    let summary;
+
+    if (correctGuessers.length > 0) {
+        // If there's at least one winner, the host also wins.
+        winners = [...correctGuessers, { user_id: game.host_user_id }];
+        winnings = Math.floor(pot / winners.length);
+
+        for (const winner of winners) {
+            await grant(winner.user_id, winnings, 'wavelength_win');
+        }
+        summary = `The game has ended! The target was **${game.target_number}**. The pot was **${pot} GC**.\n\n`;
+        summary += `**Winners (each wins ${winnings} GC):**\n`;
+        summary += winners.map(p => `<@${p.user_id}>`).join('\n');
+    } else {
+        // If no one guessed correctly, the house wins the whole pot.
+        summary = `The game has ended! The target was **${game.target_number}**. The pot was **${pot} GC**.\n\n`;
+        summary += '**No one guessed correctly! The house wins.**';
     }
 
-    const pot = (players.length) * game.wager;
-    const winnings = winners.length > 0 ? Math.floor(pot / winners.length) : 0;
-
-    for (const winner of winners) {
-        await grant(winner.user_id, winnings, 'wavelength_win');
-    }
-
-    let summary = `The game has ended! The target was **${game.target_number}**.\n\n`;
-    summary += `**Winners (each win ${winnings} GC):**\n`;
-    summary += winners.map(p => `<@${p.user_id}>`).join('\n') || 'None';
     summary += '\n\n**All Guesses:**\n';
-    summary += players.map(p => `<@${p.user_id}>: ${p.guess}`).join('\n');
+    summary += players.map(p => `<@${p.user_id}>: ${p.guess}`).join('\n') || 'No players joined.';
 
     const channel = await client.channels.fetch(game.channel_id);
     const message = await channel.messages.fetch(game.message_id);
+
 
     const finalEmbed = {
         color: 0x28a745, // Green

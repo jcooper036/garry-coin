@@ -206,6 +206,16 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const game = await getActiveWavelengthGame();
         if (!game) return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "This game is no longer active.", flags: InteractionResponseFlags.EPHEMERAL } });
 
+        if (playerId === game.host_user_id) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: "You are the host of this game and cannot join.",
+              flags: InteractionResponseFlags.EPHEMERAL,
+            },
+          });
+        }
+
         const playerUser = await getUser(playerId);
         if (!playerUser || playerUser.balance < game.wager) {
           return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `You're too poor for this game. You only have ${playerUser?.balance || 0} GC.`, flags: InteractionResponseFlags.EPHEMERAL } });
@@ -386,6 +396,14 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
       const hostWord = components[0].components[0].value;
       const scale = wavelengthScales[scaleIndex];
+
+      console.log(`[Wavelength Modal Submit] Creating game with:
+        - Host: ${user.id}
+        - Wager: ${wager}
+        - Show Guesses: ${showPlayerGuesses}
+        - Scale: ${scale.scale_left} <-> ${scale.scale_right}
+        - Target Number: ${targetNumber}
+        - Host Word: ${hostWord}`);
 
       res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
