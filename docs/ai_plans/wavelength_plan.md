@@ -53,27 +53,27 @@ Stores the state of each player within a game.
 ## Implementation Steps
 
 ### 1. Command: `/garrywavelength`
-- **File:** `src/commands/games/wavelength.js` (new file)
+- **File:** `src/commands/games/wavelength.js`
 - **Definition:** Add the command to `src/command_definitions.js` with a required `wager` integer option and optional `show_player_guesses` boolean option.
 - **Execution Flow:**
-    1.  Check for an existing active Wavelength game using `getActiveWavelengthGame()`. If one exists, reply with an ephemeral message and stop.
-    2.  Check the host's balance. If it's less than `wager`, reply with an ephemeral message and stop.
-    3.  Acknowledge the interaction with `DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE`.
-    4.  Send an ephemeral follow-up message to the host, prompting them to set up the game (scale extremes, target number, host word). This will likely involve a Discord Modal for structured input.
-    5.  Set the game status to `waiting_for_host_input`.
+    1.  Check for an existing active Wavelength game.
+    2.  Check the host's balance.
+    3.  Randomly select a scale from `assets/wavelength_scales.json` and a secret `target_number` from -3 to 3.
+    4.  Send an **ephemeral message** to the host containing the full scale text, the secret number, and a button (`[Enter Your Word]`). This avoids Discord's 45-character limit for modal titles.
 
-### 2. Host Setup Interaction (Modal Submission)
-- **File:** `src/index.js` (handle modal submission)
-- **Execution Flow:**
-    1.  When the host submits the modal:
-        - Validate the input (e.g., target number is -3 to 3).
+### 2. Host Setup Interaction (Button Click & Modal Submission)
+- **File:** `src/index.js` (handle button and modal interactions)
+- **`[Enter Your Word]` Button Click:**
+    1.  When the host clicks the button from the ephemeral message, present them with a **Discord Modal**.
+    2.  The modal will have a single text input prompting for their word.
+- **Modal Submission:**
+    1.  When the host submits the modal with their word:
+        - Acknowledge the interaction with `DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE`.
         - Transfer the `wager` from the host to the bot's account.
-        - Call `createWavelengthGame()` with the host's input.
-        - Update the game status to `waiting_for_players`.
-        - Send the initial public game message with the scale, host's word, and a `[Join Game]` button.
+        - Call `createWavelengthGame()` with the host's input (scale, word, wager, etc.).
+        - Set the game status to `waiting_for_players`.
+        - Send the initial **public game message** with the scale, host's word, and a `[Join Game]` button.
         - Start a 10-minute timer for the game to automatically end if not revealed by the host.
-    2. When the game starts, the host is give the scale (with each end) and a number. They are only coming up with a response. Phrase it as a prompt "On a scale of -3 being worst 5 movies of all time and 3 being best 5 movies, what move would you rate a 2"?
-    3. The scale ends come from `assets/wavelength_scales.json`. Randomly pick a number from -3 to 3.
 
 ### 3. Player Joining
 - **File:** `src/index.js` (handle button interaction)

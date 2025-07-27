@@ -103,6 +103,16 @@ module.exports = {
   updateBusGamePlayer,
   getBusGamePlayer,
   cancelBusGame,
+  // Wavelength
+  createWavelengthGame,
+  getWavelengthGame,
+  getActiveWavelengthGame,
+  updateWavelengthGame,
+  addPlayerToWavelengthGame,
+  getWavelengthPlayers,
+  updateWavelengthPlayer,
+  getWavelengthPlayer,
+  cancelWavelengthGame,
 };
 
 // --- Ride the Bus Functions ---
@@ -175,4 +185,81 @@ async function getBusGamePlayer(gameId, userId) {
 
 async function cancelBusGame(gameId) {
   return db('bus_games').where({ id: gameId }).update({ status: 'cancelled' });
+}
+
+// --- Wavelength Functions ---
+
+async function createWavelengthGame(hostId, channelId, messageId, wager, scaleLeft, scaleRight, targetNumber, hostWord, showPlayerGuesses) {
+  return db.transaction(async trx => {
+    const [game] = await trx('wavelength_games').insert({
+      host_user_id: hostId,
+      channel_id: channelId,
+      message_id: messageId,
+      wager: wager,
+      status: 'waiting_for_players',
+      scale_left: scaleLeft,
+      scale_right: scaleRight,
+      target_number: targetNumber,
+      host_word: hostWord,
+      show_player_guesses: showPlayerGuesses,
+    }).returning('*');
+
+    await trx('wavelength_players').insert({
+      game_id: game.id,
+      user_id: hostId,
+      player_status: 'joined',
+    });
+
+    console.log(`Created new Wavelength game with ID: ${game.id} by host: ${hostId}`);
+    return game;
+  });
+}
+
+async function getWavelengthGame(gameId) {
+  return db('wavelength_games').where({ id: gameId }).first();
+}
+
+async function getActiveWavelengthGame() {
+  return db('wavelength_games')
+    .whereIn('status', ['waiting_for_host_input', 'waiting_for_players', 'guessing'])
+    .first();
+}
+
+async function updateWavelengthGame(gameId, updates) {
+  return db('wavelength_games').where({ id: gameId }).update(updates);
+}
+
+async function addPlayerToWavelengthGame(gameId, userId) {
+  const existingPlayer = await db('wavelength_players').where({ game_id: gameId, user_id: userId }).first();
+  if (existingPlayer) {
+    console.log(`User ${userId} is already in game ${gameId}.`);
+    return { success: false, message: 'already_joined' };
+  }
+
+  await db('wavelength_players').insert({
+    game_id: gameId,
+    user_id: userId,
+    player_status: 'joined',
+  });
+
+  console.log(`Added player ${userId} to game ${gameId}`);
+  return { success: true };
+}
+
+async function getWavelengthPlayers(gameId) {
+  return db('wavelength_players').where({ game_id: gameId });
+}
+
+async function updateWavelengthPlayer(gameId, userId, updates) {
+  return db('wavelength_players')
+    .where({ game_id: gameId, user_id: userId })
+    .update(updates);
+}
+
+async function getWavelengthPlayer(gameId, userId) {
+  return db('wavelength_players').where({ game_id: gameId, user_id: userId }).first();
+}
+
+async function cancelWavelengthGame(gameId) {
+  return db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' });
 }
