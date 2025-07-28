@@ -389,6 +389,73 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         return;
       }
     }
+    if (custom_id.startsWith('heist_')) {
+      const [game, choice, wagerStr, targetId] = custom_id.split('_');
+      const wager = parseInt(wagerStr, 10);
+
+      // The original interaction contains the ID of the user who initiated the command.
+      // We check to make sure the person clicking the button is the one who started the heist.
+      if (req.body.message.interaction.user.id !== playerId) {
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: "This isn't your heist! Start your own with `/heist`.",
+            flags: InteractionResponseFlags.EPHEMERAL,
+          },
+        });
+      }
+      if (game === 'heist') {
+        let successChance = 0.5; // Default 50% chance for the bot
+        const botId = client.user.id;
+
+        if (targetId !== botId) {
+          const targetUser = await getUser(targetId);
+          if (targetUser && targetUser.last_active_at) {
+            const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
+
+            const minChance = 0.33;
+            const maxChance = 0.90;
+            const minDays = 2;
+            const maxDays = 14;
+
+            if (daysInactive <= minDays) {
+              successChance = minChance;
+            } else if (daysInactive >= maxDays) {
+              successChance = maxChance;
+            } else {
+              const slope = (maxChance - minChance) / (maxDays - minDays);
+              successChance = minChance + (slope * (daysInactive - minDays));
+            }
+          }
+        }
+
+        const win = Math.random() < successChance;
+        let resultMessage = '';
+
+        if (win) {
+          await transfer(targetId, playerId, wager, 'heist_win');
+          resultMessage = `Success! <@${playerId}> cut the ${choice} wire and pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>! (Chance: ${Math.round(successChance * 100)}%)`;
+        } else {
+          await transfer(playerId, targetId, wager, 'heist_loss');
+          resultMessage = `LMAO <@${playerId}> cut the wrong wire and got caught, losing ${wager} GarryCoins to <@${targetId}>`;
+        }
+
+        // Disable buttons on the original message
+        const originalMessage = req.body.message;
+        const disabledComponents = originalMessage.components.map(row => {
+          row.components.forEach(component => component.disabled = true);
+          return row;
+        });
+
+        return res.send({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            content: resultMessage,
+            components: disabledComponents,
+          },
+        });
+      }
+    }
   }
 
   if (type === InteractionType.MODAL_SUBMIT) {
@@ -466,74 +533,6 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
       return;
     }
-  }
-
-
-  // --- Heist Button Handling ---
-  const [game, choice, wagerStr, targetId] = custom_id.split('_');
-  const wager = parseInt(wagerStr, 10);
-
-  // The original interaction contains the ID of the user who initiated the command.
-  // We check to make sure the person clicking the button is the one who started the heist.
-  if (req.body.message.interaction.user.id !== playerId) {
-    return res.send({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: "This isn't your heist! Start your own with `/heist`.",
-        flags: InteractionResponseFlags.EPHEMERAL,
-      },
-    });
-  }
-  if (game === 'heist') {
-    let successChance = 0.5; // Default 50% chance for the bot
-    const botId = client.user.id;
-
-    if (targetId !== botId) {
-      const targetUser = await getUser(targetId);
-      if (targetUser && targetUser.last_active_at) {
-        const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
-
-        const minChance = 0.33;
-        const maxChance = 0.90;
-        const minDays = 2;
-        const maxDays = 14;
-
-        if (daysInactive <= minDays) {
-          successChance = minChance;
-        } else if (daysInactive >= maxDays) {
-          successChance = maxChance;
-        } else {
-          const slope = (maxChance - minChance) / (maxDays - minDays);
-          successChance = minChance + (slope * (daysInactive - minDays));
-        }
-      }
-    }
-
-    const win = Math.random() < successChance;
-    let resultMessage = '';
-
-    if (win) {
-      await transfer(targetId, playerId, wager, 'heist_win');
-      resultMessage = `Success! <@${playerId}> cut the ${choice} wire and pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>! (Chance: ${Math.round(successChance * 100)}%)`;
-    } else {
-      await transfer(playerId, targetId, wager, 'heist_loss');
-      resultMessage = `LMAO <@${playerId}> cut the wrong wire and got caught, losing ${wager} GarryCoins to <@${targetId}>`;
-    }
-
-    // Disable buttons on the original message
-    const originalMessage = req.body.message;
-    const disabledComponents = originalMessage.components.map(row => {
-      row.components.forEach(component => component.disabled = true);
-      return row;
-    });
-
-    return res.send({
-      type: InteractionResponseType.UPDATE_MESSAGE,
-      data: {
-        content: resultMessage,
-        components: disabledComponents,
-      },
-    });
   }
 }
 );
