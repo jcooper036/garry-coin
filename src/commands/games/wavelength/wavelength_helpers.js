@@ -7,11 +7,13 @@ function startWavelengthTimer(gameId, client) {
         clearTimeout(activeTimers.get(gameId));
     }
 
+    const timeout = process.env.NODE_ENV === 'development' ? 15 * 1000 : 10 * 60 * 1000; // 15 seconds in dev, 10 minutes in prod
+
     const timerId = setTimeout(() => {
         console.log(`[Game ${gameId}] Wavelength game timer expired. Ending game.`);
         endWavelengthGame(gameId, client);
         activeTimers.delete(gameId);
-    }, 10 * 60 * 1000); // 10 minutes
+    }, timeout);
 
     activeTimers.set(gameId, timerId);
 }

@@ -3,6 +3,7 @@ services:
   api:
     build: .
     environment:
+      - NODE_ENV=development
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - DB_HOST=db
       - DB_PORT=5432
@@ -28,6 +29,7 @@ services:
   emoji-bot:
     build: .
     environment:
+      - NODE_ENV=development
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - DB_HOST=db
