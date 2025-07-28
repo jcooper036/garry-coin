@@ -207,3 +207,11 @@ This session focused on implementing a new Wordle rewards feature. Key aspects i
 - **Parsing Fixes**: Corrected the message parsing logic to properly extract user IDs from Discord's `<@USER_ID>` mention format.
 - **Unsolved Handling**: Ensured that users who don't solve the Wordle (X/6) are still recorded in the `wordle_rewards` table with 10 tries.
 
+# 2025-07-28 17:28:40 Session Summary
+
+This session focused on debugging and fixing a critical server crash.
+
+- **Problem Identification**: Diagnosed a `ReferenceError: custom_id is not defined` that crashed the server. The root cause was an unconditional code block at the end of `src/index.js` that attempted to process `/heist` button interactions. This block was incorrectly executing for all interaction types, including slash commands where `custom_id` is not available.
+- **Replication**: Determined that the crash could be replicated by running any slash command whose handler did not explicitly send a response, causing execution to "fall through" to the faulty code. The user confirmed this with the `/heist` command.
+- **Solution**: Refactored `src/index.js` by moving the heist button handling logic into the `if (type === InteractionType.MESSAGE_COMPONENT)` block. Added a conditional check, `if (custom_id.startsWith('heist_'))`, to ensure the logic only runs for valid heist button clicks, resolving the crash.
+
