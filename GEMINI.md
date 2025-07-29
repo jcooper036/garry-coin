@@ -282,3 +282,18 @@ This session focused on debugging and fixing a critical server crash.
 - **Problem Identification**: Diagnosed a `ReferenceError: custom_id is not defined` that crashed the server. The root cause was an unconditional code block at the end of `src/index.js` that attempted to process `/heist` button interactions. This block was incorrectly executing for all interaction types, including slash commands where `custom_id` is not available.
 - **Replication**: Determined that the crash could be replicated by running any slash command whose handler did not explicitly send a response, causing execution to "fall through" to the faulty code. The user confirmed this with the `/heist` command.
 - **Solution**: Refactored `src/index.js` by moving the heist button handling logic into the `if (type === InteractionType.MESSAGE_COMPONENT)` block. Added a conditional check, `if (custom_id.startsWith('heist_'))`, to ensure the logic only runs for valid heist button clicks, resolving the crash.
+
+## 2025-07-28 Session Summary (Database Connection Resilience)
+
+This session focused on diagnosing and fixing a "Connection terminated unexpectedly" error that occurred during long-running game timers.
+
+- **Problem Identification**: Traced the error to the `endWavelengthGame` function, which is called by a `setTimeout` after 10 minutes. The long delay caused the database connection to become stale and be terminated by the server.
+- **Troubleshooting & Debugging**:
+    - Initially attempted to solve the issue with Knex.js connection pooling, but this caused unrelated Docker daemon errors for the user and was reverted.
+    - To accelerate testing, we temporarily changed the 10-minute game timer to 15 seconds for the development environment.
+    - Discovered the test timer wasn't working because the `NODE_ENV=development` environment variable was not set in `docker-compose.yml`. Adding it to the `api` and `emoji-bot` services resolved the timer issue.
+- **Solution: Resilient Error Handling**:
+    - Instead of relying on global connection pool settings, we implemented a more targeted fix.
+    - Wrapped the database logic within the `endWavelengthGame` function in a `try...catch` block.
+    - If a "Connection terminated" error is caught, the function now logs the error and automatically retries the operation once after a 5-second delay.
+- **Validation**: Successfully tested the fix by starting a Wavelength game and manually restarting the database container (`docker-compose restart db`), forcing a connection drop. The retry logic engaged as expected, and the game concluded successfully without crashing the bot.
