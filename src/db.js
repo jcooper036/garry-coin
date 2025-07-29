@@ -5,7 +5,7 @@ const environment = process.env.NODE_ENV || 'development';
 const db = knex(knexConfig[environment]);
 
 const MAX_RETRIES = 1;
-const RETRY_DELAY_MS = 5000;
+const RETRY_DELAY_MS = 2000;
 
 async function withRetry(fn, retries = MAX_RETRIES, delay = RETRY_DELAY_MS) {
   try {
@@ -133,6 +133,9 @@ module.exports = {
   updateWavelengthPlayer,
   getWavelengthPlayer,
   cancelWavelengthGame,
+  // Wordle
+  checkWordleDay,
+  processWordleTransaction,
 };
 
 // --- Ride the Bus Functions
@@ -278,5 +281,44 @@ async function getWavelengthPlayer(gameId, userId) {
 }
 
 async function cancelWavelengthGame(gameId) {
-  return withRetry(() => db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' }));
+    return withRetry(() => db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' }));
+}
+
+// --- Wordle Functions ---
+
+async function checkWordleDay(today, userIds) {
+    return withRetry(() => db('wordle_rewards')
+        .where('reward_date', today)
+        .whereIn('user_id', userIds)
+        .first());
+}
+
+async function processWordleTransaction(userId, tries, amount, isCheater, transactionType) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    return withRetry(() => db.transaction(async trx => {
+        // Update user balance
+        if (amount > 0) {
+            await trx('users').where({ user_id: userId }).increment('balance', amount);
+        } else if (amount < 0) {
+            await trx('users').where({ user_id: userId }).decrement('balance', Math.abs(amount));
+        }
+
+        // Record in transactions table
+        await trx('transactions').insert({
+            sending_user_id: isCheater ? userId : 'wordle_bot',
+            receiving_user_id: isCheater ? 'wordle_bot' : userId,
+            amount: Math.abs(amount),
+            transaction_type: transactionType,
+        });
+
+        // Record in wordle_rewards table
+        await trx('wordle_rewards').insert({
+            user_id: userId,
+            reward_date: today,
+            tries: tries,
+            reward_amount: amount,
+            was_caught_cheating: isCheater,
+        });
+    }));
 }

@@ -297,3 +297,13 @@ This session focused on diagnosing and fixing a "Connection terminated unexpecte
     - Wrapped the database logic within the `endWavelengthGame` function in a `try...catch` block.
     - If a "Connection terminated" error is caught, the function now logs the error and automatically retries the operation once after a 5-second delay.
 - **Validation**: Successfully tested the fix by starting a Wavelength game and manually restarting the database container (`docker-compose restart db`), forcing a connection drop. The retry logic engaged as expected, and the game concluded successfully without crashing the bot.
+
+## 2025-07-29 Session Summary (Database Connection Resilience Part 2)
+
+This session focused on diagnosing and fixing a "Connection terminated unexpectedly" error in the `/ridethebus` game.
+
+- **Problem Identification**: The error was the same as the one previously fixed for the Wavelength game. Long-running `setTimeout` calls in `src/commands/games/ride_the_bus/ridethebus_helpers.js` were causing the database connection to go stale.
+- **Solution: Proactive Resilient Error Handling**:
+    - Implemented a generic `withRetry` function in `src/db.js` to handle database connection errors.
+    - Wrapped the `findOrCreateUser` and `updateUserActivity` functions with the `withRetry` logic, as they were the source of the immediate errors.
+    - Proactively wrapped all other database functions for both the `Ride the Bus` and `Wavelength` games to prevent similar issues in the future.
