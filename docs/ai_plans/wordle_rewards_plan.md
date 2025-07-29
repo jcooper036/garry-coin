@@ -4,7 +4,7 @@
 Implement a feature to automatically reward users with GarryCoin based on their daily Wordle performance, including a "cheat detection" mechanism and public reporting.
 
 ## 2. Triggering Mechanism & User Identification
-- **Listener**: The `emoji-bot` service (`src/bot.js`) will listen for `messageCreate` events.
+- **Listener**: The `emoji-bot` service (`src/bot.js`) will listen for both `messageCreate` and `messageUpdate` events to catch new, replied, or edited messages from the Wordle bot.
 - **Identification**: It will identify the Wordle bot's daily results message by checking `message.author.bot` and matching the message content against a specific pattern (e.g., starting with "Your group is on a").
 - **User Mapping**: The bot will parse the `@mentions` in the message. The `message.mentions.users` collection provided by `discord.js` will be the source of truth for mapping mentioned names to their unique user IDs, which is crucial for database operations.
 
