@@ -1,4 +1,4 @@
-const { db, transfer, grant } = require('./db');
+const { checkWordleDay, processWordleTransaction } = require('./db');
 
 const REWARD_STRUCTURE = {
     1: 100,
@@ -20,27 +20,31 @@ function getRandomEmoji(emojiList) {
 }
 
 async function handleWordleMessage(message) {
+    console.log('[Wordle] Received a potential Wordle message.');
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
     // 1. Check if today's Wordle has already been processed for any user mentioned.
-    // This prevents processing the same message multiple times if the bot restarts.
     const mentionedUserIds = [...message.mentions.users.keys()];
-    const existingRecord = await db('wordle_rewards')
-        .where('reward_date', today)
-        .whereIn('user_id', mentionedUserIds)
-        .first();
-
-    if (existingRecord) {
-        console.log(`Wordle results for ${today} have already been processed. Skipping.`);
+    if (mentionedUserIds.length === 0) {
+        console.log('[Wordle] No mentioned users found in the message. Skipping.');
         return;
     }
 
+    const existingRecord = await checkWordleDay(today, mentionedUserIds);
+
+    if (existingRecord) {
+        console.log(`[Wordle] Results for ${today} have already been processed for user ${existingRecord.user_id}. Skipping.`);
+        return;
+    }
+
+    console.log('[Wordle] New results for today. Parsing message...');
     // 2. Parse the message to get user scores
     const results = parseWordleResults(message.content, message.mentions.users);
     if (Object.keys(results).length === 0) {
-        console.log('Could not parse any user scores from the Wordle message.');
+        console.log('[Wordle] Could not parse any user scores from the message.');
         return;
     }
+    console.log(`[Wordle] Parsed results for ${Object.keys(results).length} users.`);
 
     // 3. Process each user's result and group them
     const winnersByTries = {};
@@ -59,6 +63,7 @@ async function handleWordleMessage(message) {
             finalAmount = -CHEAT_PENALTY;
             transactionType = 'wordle_cheat_fine';
             cheaters.push(userId);
+            console.log(`[Wordle] User ${userId} was flagged as a cheater.`);
         } else if (tries) { // Solved
             finalAmount = REWARD_STRUCTURE[tries] || 0;
             transactionType = 'wordle_reward';
@@ -66,15 +71,18 @@ async function handleWordleMessage(message) {
                 winnersByTries[tries] = [];
             }
             winnersByTries[tries].push(userId);
+            console.log(`[Wordle] User ${userId} solved in ${tries} tries, earning ${finalAmount} GC.`);
         } else { // Unsolved (X/6)
             finalAmount = 0;
             finalTries = 10; // Set tries to 10 for unsolved
             transactionType = 'wordle_unsolved';
             unsolved.push(userId);
+            console.log(`[Wordle] User ${userId} did not solve the Wordle.`);
         }
 
         // Always record the event in the database
         await processWordleTransaction(userId, finalTries, finalAmount, isCheater, transactionType);
+        console.log(`[Wordle] Recorded transaction for user ${userId}.`);
     }
 
     // 4. Construct the public report

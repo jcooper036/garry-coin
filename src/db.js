@@ -4,22 +4,42 @@ const knexConfig = require('../knexfile');
 const environment = process.env.NODE_ENV || 'development';
 const db = knex(knexConfig[environment]);
 
-async function findOrCreateUser(userId) {
-  let user = await db('users').where({ user_id: userId }).first();
-  if (user) {
-    // User exists, update their last active time
-    await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
-  } else {
-    // User doesn't exist, create them
-    user = { user_id: userId, balance: 0, last_active_at: db.fn.now() };
-    await db('users').insert(user);
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 2000;
+
+async function withRetry(fn, retries = MAX_RETRIES, delay = RETRY_DELAY_MS) {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0 && (error.code === 'ECONNRESET' || error.message.includes('Connection terminated'))) {
+      console.log(`Database connection error: "${error.message}". Retrying in ${delay / 1000}s... (${retries} retries left)`);
+      await new Promise(res => setTimeout(res, delay));
+      return withRetry(fn, retries - 1, delay);
+    } else {
+      console.error(`Database operation failed after all retries or for a non-retriable error:`, error);
+      throw error;
+    }
   }
-  return user;
+}
+
+async function findOrCreateUser(userId) {
+  return withRetry(async () => {
+    let user = await db('users').where({ user_id: userId }).first();
+    if (user) {
+      await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
+    } else {
+      user = { user_id: userId, balance: 0, last_active_at: db.fn.now() };
+      await db('users').insert(user);
+    }
+    return user;
+  });
 }
 
 async function updateUserActivity(userId) {
-  console.log(`updating ${userId} last activity`)
-  await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
+  return withRetry(async () => {
+    console.log(`updating ${userId} last activity`);
+    await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
+  });
 }
 
 async function getUser(userId) {
@@ -113,12 +133,15 @@ module.exports = {
   updateWavelengthPlayer,
   getWavelengthPlayer,
   cancelWavelengthGame,
+  // Wordle
+  checkWordleDay,
+  processWordleTransaction,
 };
 
-// --- Ride the Bus Functions ---
+// --- Ride the Bus Functions
 
 async function createBusGame(hostId, channelId, messageId, wager) {
-  return db.transaction(async trx => {
+  return withRetry(() => db.transaction(async trx => {
     const [game] = await trx('bus_games').insert({
       host_user_id: hostId,
       channel_id: channelId,
@@ -135,62 +158,63 @@ async function createBusGame(hostId, channelId, messageId, wager) {
 
     console.log(`Created new bus game with ID: ${game.id} by host: ${hostId}`);
     return game;
-  });
+  }));
 }
 
 async function getBusGame(gameId) {
-  return db('bus_games').where({ id: gameId }).first();
+  return withRetry(() => db('bus_games').where({ id: gameId }).first());
 }
 
 async function getActiveBusGame() {
-  return db('bus_games')
+  return withRetry(() => db('bus_games')
     .whereIn('status', ['waiting_for_players', 'active'])
-    .first();
+    .first());
 }
 
 async function updateBusGame(gameId, updates) {
-  return db('bus_games').where({ id: gameId }).update(updates);
+  return withRetry(() => db('bus_games').where({ id: gameId }).update(updates));
 }
 
 async function addPlayerToBusGame(gameId, userId) {
-  // First, check if the player is already in the game to avoid violating the unique constraint.
-  const existingPlayer = await db('bus_game_players').where({ game_id: gameId, user_id: userId }).first();
-  if (existingPlayer) {
-    console.log(`User ${userId} is already in game ${gameId}.`);
-    return { success: false, message: 'already_joined' };
-  }
+  return withRetry(async () => {
+    const existingPlayer = await db('bus_game_players').where({ game_id: gameId, user_id: userId }).first();
+    if (existingPlayer) {
+      console.log(`User ${userId} is already in game ${gameId}.`);
+      return { success: false, message: 'already_joined' };
+    }
 
-  await db('bus_game_players').insert({
-    game_id: gameId,
-    user_id: userId,
+    await db('bus_game_players').insert({
+      game_id: gameId,
+      user_id: userId,
+    });
+
+    console.log(`Added player ${userId} to game ${gameId}`);
+    return { success: true };
   });
-
-  console.log(`Added player ${userId} to game ${gameId}`);
-  return { success: true };
 }
 
 async function getBusGamePlayers(gameId) {
-  return db('bus_game_players').where({ game_id: gameId });
+  return withRetry(() => db('bus_game_players').where({ game_id: gameId }));
 }
 
 async function updateBusGamePlayer(gameId, userId, updates) {
-  return db('bus_game_players')
+  return withRetry(() => db('bus_game_players')
     .where({ game_id: gameId, user_id: userId })
-    .update(updates);
+    .update(updates));
 }
 
 async function getBusGamePlayer(gameId, userId) {
-  return db('bus_game_players').where({ game_id: gameId, user_id: userId }).first();
+  return withRetry(() => db('bus_game_players').where({ game_id: gameId, user_id: userId }).first());
 }
 
 async function cancelBusGame(gameId) {
-  return db('bus_games').where({ id: gameId }).update({ status: 'cancelled' });
-}
+  return withRetry(() => db('bus_games').where({ id: gameId }).update({ status: 'cancelled' }));
+} ""
 
 // --- Wavelength Functions ---
 
 async function createWavelengthGame(hostId, channelId, messageId, wager, scaleLeft, scaleRight, targetNumber, hostWord, showPlayerGuesses) {
-  return db.transaction(async trx => {
+  return withRetry(() => db.transaction(async trx => {
     const [game] = await trx('wavelength_games').insert({
       host_user_id: hostId,
       channel_id: channelId,
@@ -206,54 +230,95 @@ async function createWavelengthGame(hostId, channelId, messageId, wager, scaleLe
 
     console.log(`Created new Wavelength game with ID: ${game.id} by host: ${hostId}`);
     return game;
-  });
+  }));
 }
 
 async function getWavelengthGame(gameId) {
-  return db('wavelength_games').where({ id: gameId }).first();
+  return withRetry(() => db('wavelength_games').where({ id: gameId }).first());
 }
 
 async function getActiveWavelengthGame() {
-  return db('wavelength_games')
+  return withRetry(() => db('wavelength_games')
     .whereIn('status', ['waiting_for_host_input', 'waiting_for_players', 'guessing'])
-    .first();
+    .first());
 }
 
 async function updateWavelengthGame(gameId, updates) {
-  return db('wavelength_games').where({ id: gameId }).update(updates);
+  return withRetry(() => db('wavelength_games').where({ id: gameId }).update(updates));
 }
 
 async function addPlayerToWavelengthGame(gameId, userId) {
-  const existingPlayer = await db('wavelength_players').where({ game_id: gameId, user_id: userId }).first();
-  if (existingPlayer) {
-    console.log(`User ${userId} is already in game ${gameId}.`);
-    return { success: false, message: 'already_joined' };
-  }
+  return withRetry(async () => {
+    const existingPlayer = await db('wavelength_players').where({ game_id: gameId, user_id: userId }).first();
+    if (existingPlayer) {
+      console.log(`User ${userId} is already in game ${gameId}.`);
+      return { success: false, message: 'already_joined' };
+    }
 
-  await db('wavelength_players').insert({
-    game_id: gameId,
-    user_id: userId,
-    player_status: 'joined',
+    await db('wavelength_players').insert({
+      game_id: gameId,
+      user_id: userId,
+      player_status: 'joined',
+    });
+
+    console.log(`Added player ${userId} to game ${gameId}`);
+    return { success: true };
   });
-
-  console.log(`Added player ${userId} to game ${gameId}`);
-  return { success: true };
 }
 
 async function getWavelengthPlayers(gameId) {
-  return db('wavelength_players').where({ game_id: gameId });
+  return withRetry(() => db('wavelength_players').where({ game_id: gameId }));
 }
 
 async function updateWavelengthPlayer(gameId, userId, updates) {
-  return db('wavelength_players')
+  return withRetry(() => db('wavelength_players')
     .where({ game_id: gameId, user_id: userId })
-    .update(updates);
+    .update(updates));
 }
 
 async function getWavelengthPlayer(gameId, userId) {
-  return db('wavelength_players').where({ game_id: gameId, user_id: userId }).first();
+  return withRetry(() => db('wavelength_players').where({ game_id: gameId, user_id: userId }).first());
 }
 
 async function cancelWavelengthGame(gameId) {
-  return db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' });
+    return withRetry(() => db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' }));
+}
+
+// --- Wordle Functions ---
+
+async function checkWordleDay(today, userIds) {
+    return withRetry(() => db('wordle_rewards')
+        .where('reward_date', today)
+        .whereIn('user_id', userIds)
+        .first());
+}
+
+async function processWordleTransaction(userId, tries, amount, isCheater, transactionType) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    return withRetry(() => db.transaction(async trx => {
+        // Update user balance
+        if (amount > 0) {
+            await trx('users').where({ user_id: userId }).increment('balance', amount);
+        } else if (amount < 0) {
+            await trx('users').where({ user_id: userId }).decrement('balance', Math.abs(amount));
+        }
+
+        // Record in transactions table
+        await trx('transactions').insert({
+            sending_user_id: isCheater ? userId : 'wordle_bot',
+            receiving_user_id: isCheater ? 'wordle_bot' : userId,
+            amount: Math.abs(amount),
+            transaction_type: transactionType,
+        });
+
+        // Record in wordle_rewards table
+        await trx('wordle_rewards').insert({
+            user_id: userId,
+            reward_date: today,
+            tries: tries,
+            reward_amount: amount,
+            was_caught_cheating: isCheater,
+        });
+    }));
 }
