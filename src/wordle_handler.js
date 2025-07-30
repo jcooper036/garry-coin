@@ -147,35 +147,5 @@ function parseWordleResults(content, mentions) {
     return results;
 }
 
-// async function processWordleTransaction(userId, tries, amount, isCheater, transactionType) {
-//     const today = new Date().toISOString().slice(0, 10);
-
-//     return db.transaction(async trx => {
-//         // Update user balance
-//         if (amount > 0) {
-//             await trx('users').where({ user_id: userId }).increment('balance', amount);
-//         } else if (amount < 0) {
-//             await trx('users').where({ user_id: userId }).decrement('balance', Math.abs(amount));
-//         }
-
-//         // Record in transactions table
-//         await trx('transactions').insert({
-//             sending_user_id: isCheater ? userId : 'wordle_bot',
-//             receiving_user_id: isCheater ? 'wordle_bot' : userId,
-//             amount: Math.abs(amount),
-//             transaction_type: transactionType,
-//         });
-
-//         // Record in wordle_rewards table
-//         await trx('wordle_rewards').insert({
-//             user_id: userId,
-//             reward_date: today,
-//             tries: tries,
-//             reward_amount: amount,
-//             was_caught_cheating: isCheater,
-//         });
-//     });
-// }
-
 
 module.exports = { handleWordleMessage };
