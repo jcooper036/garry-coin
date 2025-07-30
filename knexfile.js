@@ -10,6 +10,20 @@ module.exports = {
       password: process.env.POSTGRES_PASSWORD || 'garrycoin_password',
       database: process.env.POSTGRES_DB || 'garrycoin_db',
     },
+    pool: {
+      min: 2,
+      max: 10,
+      afterCreate: (conn, done) => {
+        conn.query('SELECT 1;', (err) => {
+          if (err) {
+            console.error('Database connection failed!', err);
+            done(err, conn);
+          } else {
+            done(err, conn);
+          }
+        });
+      },
+    },
     migrations: {
       directory: './db/migrations',
     },
@@ -42,6 +56,14 @@ module.exports = {
       ssl: {
         rejectUnauthorized: false,
       },
+    },
+    pool: {
+      min: 2,
+      max: 10,
+      acquireTimeoutMillis: 30000,
+      idleTimeoutMillis: 30000,
+      reapIntervalMillis: 1000,
+      propagateCreateError: false, // <<-- THIS TRUE MAY CAUSE UNHANDLED REJECTION
     },
     migrations: {
       directory: './db/migrations',
