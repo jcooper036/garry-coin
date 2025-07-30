@@ -307,3 +307,12 @@ This session focused on diagnosing and fixing a "Connection terminated unexpecte
     - Implemented a generic `withRetry` function in `src/db.js` to handle database connection errors.
     - Wrapped the `findOrCreateUser` and `updateUserActivity` functions with the `withRetry` logic, as they were the source of the immediate errors.
     - Proactively wrapped all other database functions for both the `Ride the Bus` and `Wavelength` games to prevent similar issues in the future.
+
+## 2025-07-30 Session Summary (Database Connection Pooling)
+
+This session focused on resolving a recurring `Connection terminated unexpectedly` database error that appeared in the Wordle feature's cloud logs.
+
+- **Problem Identification**: The error was traced to stale database connections, similar to previous incidents. The existing `withRetry` logic was not sufficient to handle the underlying connection pool's failure to recover.
+- **Solution: Knex Connection Pooling**:
+    - To create a more robust and permanent fix, the `knexfile.js` was modified to include comprehensive connection pool settings for both the `development` and `production` environments.
+    - The new `pool` configuration includes parameters like `min`, `max`, `acquireTimeoutMillis`, and `idleTimeoutMillis` to allow Knex to proactively manage, test, and evict stale or broken connections. This provides a more resilient solution than relying solely on application-level retries.
