@@ -96,7 +96,7 @@ async function recordTransaction(sending_user_id, receiving_user_id, amount, tra
 
 async function grant(receiverId, amount, transaction_type) {
   return db.transaction(async trx => {
-    await findOrCreateUser(receiverId);
+    await findOrCreateUser(receiverId, trx);
     await trx('users').where({ user_id: receiverId }).increment('balance', amount);
     const senderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
     await recordTransaction(senderId, receiverId, amount, transaction_type, trx);

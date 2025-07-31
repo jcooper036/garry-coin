@@ -316,3 +316,13 @@ This session focused on resolving a recurring `Connection terminated unexpectedl
 - **Solution: Knex Connection Pooling**:
     - To create a more robust and permanent fix, the `knexfile.js` was modified to include comprehensive connection pool settings for both the `development` and `production` environments.
     - The new `pool` configuration includes parameters like `min`, `max`, `acquireTimeoutMillis`, and `idleTimeoutMillis` to allow Knex to proactively manage, test, and evict stale or broken connections. This provides a more resilient solution than relying solely on application-level retries.
+
+## 2025-07-30 Session Summary (Knex Transaction Deadlock)
+
+This session focused on diagnosing and fixing a `KnexTimeoutError: Knex: Timeout acquiring a connection. The pool is probably full.` error.
+
+- **Problem Identification**: The error appeared on simple read commands like `/garrylookatyou`, but the root cause was a database connection pool deadlock. Functions like `transfer` and `grant` were initiating a database transaction (using one connection) and then calling `findOrCreateUser`, which attempted to acquire a *second* connection instead of using the existing transaction's connection. This exhausted the connection pool, causing subsequent database requests from any command to time out.
+
+- **Solution**: The `findOrCreateUser` function was refactored to accept an optional transaction object (`trx`). The `transfer` and `grant` functions were updated to pass their transaction object to `findOrCreateUser`, ensuring all operations within the transaction share the same database connection.
+
+- **Key Takeaway (Avoiding Deadlocks)**: When operating inside a Knex.js transaction block (`db.transaction(async trx => { ... })`), any database queries made within that block **must** use the provided `trx` object (e.g., `trx('users').select(...)`) instead of the global `db` object. This prevents the function from trying to acquire a new connection from the pool when one is already reserved by the transaction, thus avoiding deadlocks.
