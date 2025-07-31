@@ -4,6 +4,36 @@ const knexConfig = require('../knexfile');
 const environment = process.env.NODE_ENV || 'development';
 const db = knex(knexConfig[environment]);
 
+// --- Pool Logging ---
+const pool = db.client.pool;
+console.log(`[Knex Pool] Initializing pool for ${environment}`);
+pool.on('acquireRequest', (eventId) => {
+  console.log(`[Knex Pool] Acquire Request: ${eventId}`);
+  logPoolState(pool);
+});
+pool.on('acquireSuccess', (eventId, resource) => {
+  console.log(`[Knex Pool] Acquire Success: ${eventId}`);
+  logPoolState(pool);
+});
+pool.on('acquireFail', (eventId, err) => {
+  console.error(`[Knex Pool] Acquire Fail: ${eventId}`, err);
+  logPoolState(pool);
+});
+pool.on('release', (eventId, resource) => {
+  console.log(`[Knex Pool] Release: ${eventId}`);
+  logPoolState(pool);
+});
+pool.on('destroy', (eventId, resource) => {
+  console.log(`[Knex Pool] Destroy: ${eventId}`);
+  logPoolState(pool);
+});
+const logPoolState = (pool) => {
+  if (pool) {
+    console.log(`[Knex Pool] State: size=${pool.size}, available=${pool.available}, pending=${pool.pending}`);
+  }
+};
+// --------------------
+
 const MAX_RETRIES = 1;
 const RETRY_DELAY_MS = 2000;
 
@@ -94,8 +124,9 @@ async function recordTransaction(sending_user_id, receiving_user_id, amount, tra
   });
 }
 
-async function grant(receiverId, amount, transaction_type) {
-  return db.transaction(async trx => {
+async function grant(receiverId, amount, transaction_type, trx) {
+  const db_conn = trx || db;
+  return db_conn.transaction(async trx => {
     await findOrCreateUser(receiverId, trx);
     await trx('users').where({ user_id: receiverId }).increment('balance', amount);
     const senderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
@@ -281,44 +312,45 @@ async function getWavelengthPlayer(gameId, userId) {
 }
 
 async function cancelWavelengthGame(gameId) {
-    return withRetry(() => db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' }));
+  return withRetry(() => db('wavelength_games').where({ id: gameId }).update({ status: 'cancelled' }));
 }
 
 // --- Wordle Functions ---
 
 async function checkWordleDay(today, userIds) {
-    return withRetry(() => db('wordle_rewards')
-        .where('reward_date', today)
-        .whereIn('user_id', userIds)
-        .first());
+  return withRetry(() => db('wordle_rewards')
+    .where('reward_date', today)
+    .whereIn('user_id', userIds)
+    .first());
 }
 
 async function processWordleTransaction(userId, tries, amount, isCheater, transactionType) {
-    const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
 
-    return withRetry(() => db.transaction(async trx => {
-        // Update user balance
-        if (amount > 0) {
-            await trx('users').where({ user_id: userId }).increment('balance', amount);
-        } else if (amount < 0) {
-            await trx('users').where({ user_id: userId }).decrement('balance', Math.abs(amount));
-        }
+  return withRetry(() => db.transaction(async trx => {
+    // Update user balance
+    if (amount > 0) {
+      await trx('users').where({ user_id: userId }).increment('balance', amount);
+    } else if (amount < 0) {
+      await trx('users').where({ user_id: userId }).decrement('balance', Math.abs(amount));
+    }
 
-        // Record in transactions table
-        await trx('transactions').insert({
-            sending_user_id: isCheater ? userId : 'wordle_bot',
-            receiving_user_id: isCheater ? 'wordle_bot' : userId,
-            amount: Math.abs(amount),
-            transaction_type: transactionType,
-        });
+    // Record in transactions table
+    await trx('transactions').insert({
+      sending_user_id: isCheater ? userId : 'wordle_bot',
+      receiving_user_id: isCheater ? 'wordle_bot' : userId,
+      amount: Math.abs(amount),
+      transaction_type: transactionType,
+    });
 
-        // Record in wordle_rewards table
-        await trx('wordle_rewards').insert({
-            user_id: userId,
-            reward_date: today,
-            tries: tries,
-            reward_amount: amount,
-            was_caught_cheating: isCheater,
-        });
-    }));
+    // Record in wordle_rewards table
+    await trx('wordle_rewards').insert({
+      user_id: userId,
+      reward_date: today,
+      tries: tries,
+      reward_amount: amount,
+      was_caught_cheating: isCheater,
+    });
+  }));
 }
+''
