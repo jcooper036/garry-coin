@@ -13,16 +13,6 @@ module.exports = {
     pool: {
       min: 2,
       max: 10,
-      afterCreate: (conn, done) => {
-        conn.query('SELECT 1;', (err) => {
-          if (err) {
-            console.error('Database connection failed!', err);
-            done(err, conn);
-          } else {
-            done(err, conn);
-          }
-        });
-      },
     },
     migrations: {
       directory: './db/migrations',
