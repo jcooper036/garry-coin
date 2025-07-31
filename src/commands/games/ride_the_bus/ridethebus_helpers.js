@@ -346,60 +346,58 @@ async function endGame(gameId, client) {
     }
 
     console.log(`[Game ${gameId}] Ending game...`);
-    await updateBusGame(gameId, { status: 'finished' });
-    const game = await getBusGame(gameId);
-    const players = await getBusGamePlayers(gameId);
 
-    let summary = `The bus ride has ended! Here are the results:\n\n`;
-    summary += `**Final Sequence:** ${game.current_cards.map(c => `[${c.rank}${Suits[c.suit]}]`).join(' ')}\n\n`;
+    await db.transaction(async trx => {
+        await updateBusGame(gameId, { status: 'finished' });
+        const game = await getBusGame(gameId);
+        const players = await getBusGamePlayers(gameId);
 
-    const endOfLine = players.filter(p => p.player_status === 'on_bus');
-    const cashedOut = players.filter(p => p.player_status === 'cashed_out');
-    const dead = players.filter(p => p.player_status === 'dead_in_road');
+        let summary = `The bus ride has ended! Here are the results:\n\n`;
+        summary += `**Final Sequence:** ${game.current_cards.map(c => `[${c.rank}${Suits[c.suit]}]`).join(' ')}\n\n`;
 
-    console.log(`[Game ${gameId}] Final tallies - End of Line: ${endOfLine.length}, Cashed Out: ${cashedOut.length}, Dead: ${dead.length}`);
+        const endOfLine = players.filter(p => p.player_status === 'on_bus');
+        const cashedOut = players.filter(p => p.player_status === 'cashed_out');
+        const dead = players.filter(p => p.player_status === 'dead_in_road');
 
-    if (endOfLine.length > 0) {
-        summary += `**🏁 End of the Line (${endOfLine.length}):**\n`;
-        for (const player of endOfLine) {
-            const winnings = game.wager * Payouts[4];
-            console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for reaching the end.`);
-            await grant(player.user_id, winnings, 'rtb_win_end_of_line');
-            summary += `<@${player.user_id}> made it all the way and wins **${winnings} GC**!\n`;
+        console.log(`[Game ${gameId}] Final tallies - End of Line: ${endOfLine.length}, Cashed Out: ${cashedOut.length}, Dead: ${dead.length}`);
+
+        if (endOfLine.length > 0) {
+            summary += `**🏁 End of the Line (${endOfLine.length}):**\n`;
+            for (const player of endOfLine) {
+                const winnings = game.wager * Payouts[4];
+                console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for reaching the end.`);
+                await grant(player.user_id, winnings, 'rtb_win_end_of_line', trx);
+                summary += `<@${player.user_id}> made it all the way and wins **${winnings} GC**!\n`;
+            }
+            summary += '\n';
         }
-        summary += '\n';
-    }
 
-    if (cashedOut.length > 0) {
-        // summary += `**💰 Cashed Out (${cashedOut.length}):**\n`;
-        for (const player of cashedOut) {
-            const winnings = game.wager * Payouts[player.stops_rode];
-            console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
-            await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
-            summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
+        if (cashedOut.length > 0) {
+            for (const player of cashedOut) {
+                const winnings = game.wager * Payouts[player.stops_rode];
+                console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
+                await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`, trx);
+                summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
+            }
+            summary += '\n';
         }
-        summary += '\n';
-    }
 
-    if (dead.length > 0) {
-        // summary += `**💀 Dead in the Road (${dead.length}):**\n`;
-        for (const player of dead) {
-            console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
+        if (dead.length > 0) {
+            for (const player of dead) {
+                console.log(`[Game ${gameId}] User ${player.user_id} lost their ${game.wager} GC wager.`);
+            }
         }
-    }
 
-    console.log(`[Game ${gameId}] Sending final message.`);
-    const channel = await client.channels.fetch(game.channel_id);
-    const message = await channel.messages.fetch(game.message_id);
+        console.log(`[Game ${gameId}] Sending final message.`);
+        const channel = await client.channels.fetch(game.channel_id);
+        const message = await channel.messages.fetch(game.message_id);
 
-    const finalEmbed = await buildGameEmbed(gameId);
-    // if (game.status === 'finished' || game.status == 'cancelled') {
-    //     summary = ''
-    // }
-    finalEmbed.description = summary; // Override the description with the final summary.
+        const finalEmbed = await buildGameEmbed(gameId);
+        finalEmbed.description = summary;
 
-    await message.edit({ embeds: [finalEmbed], components: [] });
-    console.log(`[Game ${gameId}] Final message sent.`);
+        await message.edit({ embeds: [finalEmbed], components: [] });
+        console.log(`[Game ${gameId}] Final message sent.`);
+    });
 }
 
 
