@@ -1,6 +1,12 @@
 const knex = require('knex');
 const knexConfig = require('../knexfile');
 
+const logPoolState = (pool) => {
+  if (pool) {
+    console.log(`[Knex Pool] State: size=${pool.numUsed() + pool.numFree()}, available=${pool.numFree()}, pending=${pool.numPendingAcquires()}`);
+  }
+};
+
 const environment = process.env.NODE_ENV || 'development';
 const db = knex(knexConfig[environment]);
 
@@ -27,11 +33,6 @@ pool.on('destroy', (eventId, resource) => {
   console.log(`[Knex Pool] Destroy: ${eventId}`);
   logPoolState(pool);
 });
-const logPoolState = (pool) => {
-  if (pool) {
-    console.log(`[Knex Pool] State: size=${pool.size}, available=${pool.available}, pending=${pool.pending}`);
-  }
-};
 // --------------------
 
 const MAX_RETRIES = 1;
