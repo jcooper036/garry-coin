@@ -405,39 +405,75 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         });
       }
       if (game === 'heist') {
-        let successChance = 0.5; // Default 50% chance for the bot
+        // --- Heist Success Formula Constants ---
+        const HEIST_BASE_CHANCE = 0.50;
+        const HEIST_MAX_CHANCE = 0.95;
+        const HEIST_MIN_CHANCE = 0.20;
+        const HEIST_ACTIVITY_MAX_PENALTY = 0.5; // Max penalty for activity (e.g., 0.15 for 15%)
+        const HEIST_ACTIVITY_MAX_DAYS = 3;     // Days until activity penalty is zero
+        const HEIST_WEALTH_MODIFIER_SCALE = 0.45; // Scales the wealth bonus/penalty
+
+        const thief = await getUser(playerId);
+        const target = await getUser(targetId);
+
+        if (!thief) {
+          return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "Could not find your user data.", flags: InteractionResponseFlags.EPHEMERAL } });
+        }
+        if (!target) {
+          return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "Could not find your target's user data.", flags: InteractionResponseFlags.EPHEMERAL } });
+        }
+
+        const thiefBalance = thief.balance;
+        const targetBalance = target.balance;
+
+        // 1. Calculate Activity Adjustment
+        let activityAdjustment = 0;
         const botId = client.user.id;
-
-        if (targetId !== botId) {
-          const targetUser = await getUser(targetId);
-          if (targetUser && targetUser.last_active_at) {
-            const daysInactive = (new Date() - new Date(targetUser.last_active_at)) / (1000 * 60 * 60 * 24);
-
-            const minChance = 0.33;
-            const maxChance = 0.90;
-            const minDays = 2;
-            const maxDays = 14;
-
-            if (daysInactive <= minDays) {
-              successChance = minChance;
-            } else if (daysInactive >= maxDays) {
-              successChance = maxChance;
-            } else {
-              const slope = (maxChance - minChance) / (maxDays - minDays);
-              successChance = minChance + (slope * (daysInactive - minDays));
-            }
+        if (targetId !== botId && target.last_active_at) {
+          const daysInactive = (new Date() - new Date(target.last_active_at)) / (1000 * 60 * 60 * 24);
+          if (daysInactive < HEIST_ACTIVITY_MAX_DAYS) {
+            const penalty = HEIST_ACTIVITY_MAX_PENALTY * ((HEIST_ACTIVITY_MAX_DAYS - daysInactive) / HEIST_ACTIVITY_MAX_DAYS);
+            activityAdjustment = -penalty;
           }
         }
 
-        const win = Math.random() < successChance;
+        // 2. Calculate Wealth Adjustment
+        let wealthRatio = 1;
+        if (targetBalance === 0) {
+          wealthRatio = (thiefBalance > 0) ? Infinity : 1;
+        } else {
+          wealthRatio = thiefBalance / targetBalance;
+        }
+        // Use Math.max to prevent log10 from returning -Infinity if wealthRatio is 0
+        const wealthAdjustment = -HEIST_WEALTH_MODIFIER_SCALE * Math.log10(Math.max(Number.MIN_VALUE, wealthRatio));
+
+        // 3. Calculate Final Success Chance
+        let finalSuccessChance = HEIST_BASE_CHANCE + activityAdjustment + wealthAdjustment;
+
+        // Clamp the final chance
+        finalSuccessChance = Math.max(HEIST_MIN_CHANCE, Math.min(HEIST_MAX_CHANCE, finalSuccessChance));
+
+        console.log(`[Heist Calculation] by ${playerId} on ${targetId} for ${wager}GC:\n` +
+          `  - Balances: Thief=${thiefBalance}, Target=${targetBalance}\n` +
+          `  - Adjustments: Activity=${activityAdjustment.toFixed(4)}, Wealth=${wealthAdjustment.toFixed(4)}\n` +
+          `  - Final Chance: ${finalSuccessChance.toFixed(4)}`);
+
+        const win = Math.random() < finalSuccessChance;
         let resultMessage = '';
+        const formatPercent = (n) => `${(n * 100).toFixed(1)}%`;
+
+        const explanation = `\n\n**Calculation:**\n` +
+          `> ${formatPercent(HEIST_BASE_CHANCE)} (Base Chance)\n` +
+          `> ${formatPercent(activityAdjustment)} (Target Activity)\n` +
+          `> ${formatPercent(wealthAdjustment)} (Wealth Ratio)\n` +
+          `> **Total: ${formatPercent(finalSuccessChance)} Chance**`;
 
         if (win) {
           await transfer(targetId, playerId, wager, 'heist_win');
-          resultMessage = `Success! <@${playerId}> cut the ${choice} wire and pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>! (Chance: ${Math.round(successChance * 100)}%)`;
+          resultMessage = `Success! <@${playerId}> pulled off the heist, stealing ${wager} GarryCoins from <@${targetId}>!` + explanation;
         } else {
           await transfer(playerId, targetId, wager, 'heist_loss');
-          resultMessage = `LMAO <@${playerId}> cut the wrong wire and got caught, losing ${wager} GarryCoins to <@${targetId}>`;
+          resultMessage = `LMAO <@${playerId}> got caught and failed the heist, losing ${wager} GarryCoins to <@${targetId}>.` + explanation;
         }
 
         // Disable buttons on the original message
