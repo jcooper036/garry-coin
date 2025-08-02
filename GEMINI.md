@@ -326,3 +326,23 @@ This session focused on diagnosing and fixing a `KnexTimeoutError: Knex: Timeout
 - **Solution**: The `findOrCreateUser` function was refactored to accept an optional transaction object (`trx`). The `transfer` and `grant` functions were updated to pass their transaction object to `findOrCreateUser`, ensuring all operations within the transaction share the same database connection.
 
 - **Key Takeaway (Avoiding Deadlocks)**: When operating inside a Knex.js transaction block (`db.transaction(async trx => { ... })`), any database queries made within that block **must** use the provided `trx` object (e.g., `trx('users').select(...)`) instead of the global `db` object. This prevents the function from trying to acquire a new connection from the pool when one is already reserved by the transaction, thus avoiding deadlocks.
+
+## 2025-08-02 Session Summary (Heist Mechanics Refactor)
+
+This session focused on a major refactor of the `/heist` game's success chance calculation.
+
+- **New Heist Formula**:
+    - Designed and implemented a more dynamic formula: `Final Chance = Base (50%) + Activity Adjustment + Wealth Adjustment`.
+    - **Activity Adjustment**: A configurable penalty (default: -15%) is applied for targeting users who have been active recently (within 14 days).
+    - **Wealth Adjustment**: A "Robin Hood" style modifier (default: approx. +/-15%) makes it harder to steal from poorer players and easier to steal from richer ones, based on the logarithmic ratio of their balances.
+    - The final chance is clamped between a minimum (20%) and maximum (95%) to prevent extreme outcomes.
+
+- **Implementation & Transparency**:
+    - The new logic was implemented in `src/index.js` with easily configurable constants for tweaking the formula's parameters.
+    - The result message was updated to provide players with a full breakdown of how their success chance was calculated (Base + Activity + Wealth = Total).
+    - Added detailed server-side logging for all variables involved in the heist calculation for future monitoring and balancing.
+
+- **Bug Identification & Deferred Fix**:
+    - A bug was identified where a target's `last_active_at` timestamp was being updated simply by being targeted in a heist. This was caused by the `db.transfer` function calling `findOrCreateUser`, which has a side effect of updating the timestamp.
+    - This bug incorrectly applied the maximum activity penalty to users who were targeted multiple times in a row.
+    - A fix was proposed to modify `db.transfer` to avoid this side effect, but the user opted to defer the fix and observe the current behavior after adjusting the formula's modifiers.
