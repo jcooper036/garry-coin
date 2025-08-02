@@ -343,3 +343,23 @@ This session focused on creating a secure command-line interface for bot adminis
 - **Debugging**:
     - Resolved several issues in the CLI tool, including argument parsing for messages with spaces, handling of invalid channel IDs, and fixing faulty exit logic that caused the script to hang or crash after execution.
     - Refined the `grant` and `grant-and-announce` commands to be mutually exclusive in their notification methods (DM vs. channel).
+
+## 2025-08-02 Session Summary (Heist Mechanics Refactor)
+
+This session focused on a major refactor of the `/heist` game's success chance calculation.
+
+- **New Heist Formula**:
+    - Designed and implemented a more dynamic formula: `Final Chance = Base (50%) + Activity Adjustment + Wealth Adjustment`.
+    - **Activity Adjustment**: A configurable penalty (default: -15%) is applied for targeting users who have been active recently (within 14 days).
+    - **Wealth Adjustment**: A "Robin Hood" style modifier (default: approx. +/-15%) makes it harder to steal from poorer players and easier to steal from richer ones, based on the logarithmic ratio of their balances.
+    - The final chance is clamped between a minimum (20%) and maximum (95%) to prevent extreme outcomes.
+
+- **Implementation & Transparency**:
+    - The new logic was implemented in `src/index.js` with easily configurable constants for tweaking the formula's parameters.
+    - The result message was updated to provide players with a full breakdown of how their success chance was calculated (Base + Activity + Wealth = Total).
+    - Added detailed server-side logging for all variables involved in the heist calculation for future monitoring and balancing.
+
+- **Bug Identification & Deferred Fix**:
+    - A bug was identified where a target's `last_active_at` timestamp was being updated simply by being targeted in a heist. This was caused by the `db.transfer` function calling `findOrCreateUser`, which has a side effect of updating the timestamp.
+    - This bug incorrectly applied the maximum activity penalty to users who were targeted multiple times in a row.
+    - A fix was proposed to modify `db.transfer` to avoid this side effect, but the user opted to defer the fix and observe the current behavior after adjusting the formula's modifiers.
