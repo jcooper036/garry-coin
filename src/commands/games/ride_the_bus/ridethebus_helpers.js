@@ -24,8 +24,14 @@ const Phases = {
 const Suits = { hearts: '♥️', diamonds: '♦️', clubs: '♣️', spades: '♠️' };
 const Ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
-function drawCard(deck) {
-    const cardIndex = Math.floor(Math.random() * deck.length);
+function drawCard(deck, sequence = []) {
+    let card, cardIndex, isDuplicate;
+    do {
+        cardIndex = Math.floor(Math.random() * deck.length);
+        card = deck[cardIndex];
+        isDuplicate = sequence.some(c => c.rank === card.rank && c.suit === card.suit);
+    } while (isDuplicate);
+
     return deck.splice(cardIndex, 1)[0];
 }
 
@@ -281,7 +287,7 @@ async function processRoundResults(gameId, client) {
 
 
     const deck = createDeck();
-    const outcomeCard = drawCard(deck);
+    const outcomeCard = drawCard(deck, game.current_cards);
     console.log(`[Game ${gameId}] Revealed card: ${outcomeCard.rank} of ${outcomeCard.suit}`);
 
     for (const player of onBusPlayers) {
