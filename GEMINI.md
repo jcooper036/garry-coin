@@ -327,6 +327,23 @@ This session focused on diagnosing and fixing a `KnexTimeoutError: Knex: Timeout
 
 - **Key Takeaway (Avoiding Deadlocks)**: When operating inside a Knex.js transaction block (`db.transaction(async trx => { ... })`), any database queries made within that block **must** use the provided `trx` object (e.g., `trx('users').select(...)`) instead of the global `db` object. This prevents the function from trying to acquire a new connection from the pool when one is already reserved by the transaction, thus avoiding deadlocks.
 
+## 2025-08-02 Session Summary (Admin CLI & Game Logic)
+
+This session focused on creating a secure command-line interface for bot administration and refining game logic.
+
+- **Ride the Bus Improvement**: Modified the `/ridethebus` game to ensure that randomly drawn cards are always unique and not already present in the current game sequence.
+
+- **Admin CLI Tool (`src/bot_cli.js`)**:
+    - Discussed and opted for a command-line script over admin-only slash commands to ensure admin tools are not visible to regular users.
+    - Created `src/bot_cli.js` as a dedicated tool for privileged bot actions.
+    - Implemented a `say` command for the bot to send arbitrary messages to a channel.
+    - Implemented a `grant` command to award GarryCoin to a user, notifying them via DM with a formatted message and optional memo.
+    - Implemented a `grant-and-announce` command to award GarryCoin and post the notification publicly in a specified channel instead of a DM.
+
+- **Debugging**:
+    - Resolved several issues in the CLI tool, including argument parsing for messages with spaces, handling of invalid channel IDs, and fixing faulty exit logic that caused the script to hang or crash after execution.
+    - Refined the `grant` and `grant-and-announce` commands to be mutually exclusive in their notification methods (DM vs. channel).
+
 ## 2025-08-02 Session Summary (Heist Mechanics Refactor)
 
 This session focused on a major refactor of the `/heist` game's success chance calculation.
