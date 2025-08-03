@@ -409,7 +409,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         const HEIST_BASE_CHANCE = 0.50;
         const HEIST_MAX_CHANCE = 0.95;
         const HEIST_MIN_CHANCE = 0.20;
-        const HEIST_ACTIVITY_MAX_PENALTY = 0.5; // Max penalty for activity (e.g., 0.15 for 15%)
+        const HEIST_ACTIVITY_MAX_PENALTY = 0.05; // Max penalty for activity (e.g., 0.15 for 15%)
         const HEIST_ACTIVITY_MAX_DAYS = 3;     // Days until activity penalty is zero
         const HEIST_WEALTH_MODIFIER_SCALE = 0.45; // Scales the wealth bonus/penalty
 
