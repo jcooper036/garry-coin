@@ -36,7 +36,7 @@ pool.on('destroy', (eventId, resource) => {
 // --------------------
 
 const MAX_RETRIES = 1;
-const RETRY_DELAY_MS = 2000;
+const RETRY_DELAY_MS = 5000;
 
 async function withRetry(fn, retries = MAX_RETRIES, delay = RETRY_DELAY_MS) {
   try {
