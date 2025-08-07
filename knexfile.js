@@ -88,6 +88,17 @@ module.exports = {
           console.error('[Knex Pool] Connection error:', err);
         });
         done(null, conn);
+      },
+      validate: (conn) => {
+        return new Promise((resolve, reject) => {
+          conn.query('SELECT 1', (err) => {
+            if (err) {
+              console.error('[Knex Pool] Connection validation failed:', err);
+              return reject(err);
+            }
+            resolve();
+          });
+        });
       }
     },
     migrations: {
