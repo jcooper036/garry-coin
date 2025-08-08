@@ -10,27 +10,17 @@ const logPoolState = (pool) => {
 const environment = process.env.NODE_ENV || 'development';
 const db = knex(knexConfig[environment]);
 
-// --- Pool Logging ---
+// --- Pool Logging (only errors and warnings) ---
 const pool = db.client.pool;
 console.log(`[Knex Pool] Initializing pool for ${environment}`);
-pool.on('acquireRequest', (eventId) => {
-  console.log(`[Knex Pool] Acquire Request: ${eventId}`);
-  logPoolState(pool);
-});
-pool.on('acquireSuccess', (eventId, resource) => {
-  console.log(`[Knex Pool] Acquire Success: ${eventId}`);
-  logPoolState(pool);
-});
+
+// Only log failures and destroys (important events)
 pool.on('acquireFail', (eventId, err) => {
-  console.error(`[Knex Pool] Acquire Fail: ${eventId}`, err);
-  logPoolState(pool);
-});
-pool.on('release', (eventId, resource) => {
-  console.log(`[Knex Pool] Release: ${eventId}`);
+  console.error(`[Knex Pool] Connection acquire failed: ${eventId}`, err);
   logPoolState(pool);
 });
 pool.on('destroy', (eventId, resource) => {
-  console.log(`[Knex Pool] Destroy: ${eventId}`);
+  console.log(`[Knex Pool] Connection destroyed: ${eventId}`);
   logPoolState(pool);
 });
 // --------------------
