@@ -1,9 +1,14 @@
 const knex = require('knex');
 const knexConfig = require('../knexfile');
+const { structuredLog } = require('./logger');
 
 const logPoolState = (pool) => {
   if (pool) {
-    console.log(`[Knex Pool] State: size=${pool.numUsed() + pool.numFree()}, available=${pool.numFree()}, pending=${pool.numPendingAcquires()}`);
+    structuredLog.database('Pool state', {
+      size: pool.numUsed() + pool.numFree(),
+      available: pool.numFree(),
+      pending: pool.numPendingAcquires()
+    });
   }
 };
 
@@ -12,15 +17,15 @@ const db = knex(knexConfig[environment]);
 
 // --- Pool Logging (only errors and warnings) ---
 const pool = db.client.pool;
-console.log(`[Knex Pool] Initializing pool for ${environment}`);
+structuredLog.database('Knex pool initializing', { environment });
 
 // Only log failures and destroys (important events)
 pool.on('acquireFail', (eventId, err) => {
-  console.error(`[Knex Pool] Connection acquire failed: ${eventId}`, err);
+  structuredLog.dbError('Connection acquire failed', err, { eventId });
   logPoolState(pool);
 });
 pool.on('destroy', (eventId, resource) => {
-  console.log(`[Knex Pool] Connection destroyed: ${eventId}`);
+  structuredLog.database('Connection destroyed', { eventId });
   logPoolState(pool);
 });
 // --------------------
@@ -33,11 +38,16 @@ async function withRetry(fn, retries = MAX_RETRIES, delay = RETRY_DELAY_MS) {
     return await fn();
   } catch (error) {
     if (retries > 0 && (error.code === 'ECONNRESET' || error.message.includes('Connection terminated'))) {
-      console.log(`Database connection error: "${error.message}". Retrying in ${delay / 1000}s... (${retries} retries left)`);
+      structuredLog.dbError('Database connection error, retrying', error, {
+        retryDelay: delay / 1000,
+        retriesLeft: retries
+      });
       await new Promise(res => setTimeout(res, delay));
       return withRetry(fn, retries - 1, delay);
     } else {
-      console.error(`Database operation failed after all retries or for a non-retriable error:`, error);
+      structuredLog.dbError('Database operation failed after all retries', error, {
+        retriable: error.code === 'ECONNRESET' || error.message.includes('Connection terminated')
+      });
       throw error;
     }
   }
@@ -58,7 +68,7 @@ async function findOrCreateUser(userId) {
 
 async function updateUserActivity(userId) {
   return withRetry(async () => {
-    console.log(`updating ${userId} last activity`);
+    structuredLog.database('Updating user activity', { userId });
     await db('users').where({ user_id: userId }).update({ last_active_at: db.fn.now() });
   });
 }

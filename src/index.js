@@ -6,6 +6,7 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers, createWavelengthGame, getActiveWavelengthGame, addPlayerToWavelengthGame, getWavelengthPlayers, getWavelengthGame, updateWavelengthPlayer } = require('./db');
 const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const { endWavelengthGame, startWavelengthTimer } = require('./commands/games/wavelength/wavelength_helpers');
+const { structuredLog } = require('./logger');
 const fs = require('fs');
 const path = require('path');
 
@@ -22,7 +23,7 @@ client.login(process.env.DISCORD_TOKEN);
 const commands = new Map();
 const commandsPath = path.join(__dirname, 'commands');
 const wavelengthScales = JSON.parse(fs.readFileSync(path.join(__dirname, '../assets/wavelength_scales.json'), 'utf8'));
-console.log(`[index.js] Loaded ${wavelengthScales.length} wavelength scales.`);
+structuredLog.game('Wavelength scales loaded', { count: wavelengthScales.length });
 
 // --- Wavelength Scale Validation ---
 const createWavelengthPlaceholder = (scale) => `e.g., a word for "${scale.topic}"`;
@@ -33,7 +34,7 @@ for (const scale of wavelengthScales) {
     throw new Error(`Wavelength scale placeholder is too long for discord modal creation (${placeholder.length}/100): "${placeholder}" . You need to go shorten these inputs at the source`);
   }
 }
-console.log('[index.js] All wavelength scales passed validation.');
+structuredLog.game('Wavelength scales validation passed');
 // ------------------------------------
 
 const loadCommands = (dir) => {
@@ -47,7 +48,10 @@ const loadCommands = (dir) => {
       if (command.name && command.execute) {
         commands.set(command.name, command);
       } else {
-        console.log(`[WARNING] The command at ${fullPath} is missing a required "name" or "execute" property.`);
+        structuredLog.warn('Command missing required properties', { 
+          filePath: fullPath, 
+          category: 'system' 
+        });
       }
     }
   }
@@ -74,17 +78,31 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     try {
       await updateUserActivity(user.id);
     } catch (error) {
-      console.error(`Failed to update activity for ${user.id}:`, error);
+      structuredLog.error('Failed to update user activity', {
+        userId: user.id,
+        error: error.message,
+        category: 'database'
+      });
     }
-    console.log(`Command received: ${name}`);
-    console.log(`User: ${user.id} (${user.username}) (${user.global_name})`);
-    console.log(`Channel: ${channel_id} (${channel.name}) Guild:${guild_id}`);
+    structuredLog.command('Command received', {
+      commandName: name,
+      userId: user.id,
+      username: user.username,
+      globalName: user.global_name,
+      channelId: channel_id,
+      channelName: channel.name,
+      guildId: guild_id
+    });
 
     // Ensure user exists in the database
     try {
       await findOrCreateUser(user.id);
     } catch (error) {
-      console.error(`Error checking/adding user ${user.id} to database:`, error);
+      structuredLog.error('Error checking/adding user to database', {
+        userId: user.id,
+        error: error.message,
+        category: 'database'
+      });
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -453,10 +471,17 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         // Clamp the final chance
         finalSuccessChance = Math.max(HEIST_MIN_CHANCE, Math.min(HEIST_MAX_CHANCE, finalSuccessChance));
 
-        console.log(`[Heist Calculation] by ${playerId} on ${targetId} for ${wager}GC:\n` +
-          `  - Balances: Thief=${thiefBalance}, Target=${targetBalance}\n` +
-          `  - Adjustments: Activity=${activityAdjustment.toFixed(4)}, Wealth=${wealthAdjustment.toFixed(4)}\n` +
-          `  - Final Chance: ${finalSuccessChance.toFixed(4)}`);
+        structuredLog.heist('Heist calculation', {
+          playerId,
+          targetId,
+          wager,
+          balances: { thief: thiefBalance, target: targetBalance },
+          adjustments: { 
+            activity: parseFloat(activityAdjustment.toFixed(4)),
+            wealth: parseFloat(wealthAdjustment.toFixed(4))
+          },
+          finalChance: parseFloat(finalSuccessChance.toFixed(4))
+        });
 
         const win = Math.random() < finalSuccessChance;
         let resultMessage = '';
@@ -500,8 +525,10 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     const { channel_id } = req.body;
 
     if (custom_id.startsWith('wavelength_setup')) {
-      console.log('Modal Submit - custom_id:', custom_id);
-      console.log('Modal Submit - components:', JSON.stringify(components));
+      structuredLog.game('Modal submit received', {
+        customId: custom_id,
+        components: JSON.stringify(components)
+      });
       const [_, __, wagerStr, showPlayerGuessesStr, scaleIndexStr, targetNumberStr] = custom_id.split('_');
       const wager = parseInt(wagerStr, 10);
       const showPlayerGuesses = showPlayerGuessesStr === 'true';
@@ -511,13 +538,14 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
       const hostWord = components[0].components[0].value;
       const scale = wavelengthScales[scaleIndex];
 
-      console.log(`[Wavelength Modal Submit] Creating game with:
-        - Host: ${user.id}
-        - Wager: ${wager}
-        - Show Guesses: ${showPlayerGuesses}
-        - Scale: ${scale.scale_left} <-> ${scale.scale_right}
-        - Target Number: ${targetNumber}
-        - Host Word: ${hostWord}`);
+      structuredLog.game('Creating Wavelength game', {
+        hostId: user.id,
+        wager,
+        showPlayerGuesses,
+        scale: `${scale.scale_left} <-> ${scale.scale_right}`,
+        targetNumber,
+        hostWord
+      });
 
       res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
@@ -574,5 +602,5 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 );
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  structuredLog.info('Server started', { port: PORT, category: 'system' });
 });

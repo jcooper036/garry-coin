@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { transfer, grant, updateUserActivity, getRandomActiveUser } = require('./db');
 const { handleWordleMessage } = require('./wordle_handler');
+const { structuredLog } = require('./logger');
 
 const WORDLE_BOT_IDS = (process.env.WORDLE_BOT_IDS || '').split(',');
 
@@ -22,7 +23,7 @@ const GARRYCOIN_EMOJIS = {
 };
 
 client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}!`);
+  structuredLog.bot('Bot logged in', { tag: client.user.tag });
 });
 
 client.on('messageReactionAdd', async (reaction, user) => {
@@ -32,7 +33,10 @@ client.on('messageReactionAdd', async (reaction, user) => {
     try {
       await reaction.fetch();
     } catch (error) {
-      console.error('Something went wrong when fetching the message: ', error);
+      structuredLog.error('Failed to fetch reaction message', {
+        error: error.message,
+        category: 'bot'
+      });
       // Return as `reaction.message.author` may be undefined/null
       return;
     }
@@ -48,19 +52,35 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
     // Prevent self-transfer
     if (senderId === receiverId) {
-      console.log(`User ${senderId} tried to send GarryCoin to themselves via emoji.`);
+      structuredLog.transfer('Self-transfer attempt blocked', {
+        userId: senderId,
+        method: 'emoji'
+      });
       // Optionally, send an ephemeral message to the user who reacted
       return;
     }
 
-    console.log(`Attempting to transfer ${amount} from ${senderId} to ${receiverId} via emoji.`);
+    structuredLog.transfer('Emoji transfer attempt', {
+      amount,
+      fromUserId: senderId,
+      toUserId: receiverId
+    });
     const result = await transfer(senderId, receiverId, amount, 'user_to_user_emoji');
 
     if (result.success) {
-      console.log(`Successfully transferred ${amount} GarryCoin from ${senderId} to ${receiverId}.`);
+      structuredLog.transfer('Emoji transfer successful', {
+        amount,
+        fromUserId: senderId,
+        toUserId: receiverId
+      });
       // Optionally, send a confirmation message in the channel or to the sender
     } else {
-      console.log(`Failed to transfer ${amount} GarryCoin from ${senderId} to ${receiverId}: ${result.message}`);
+      structuredLog.transfer('Emoji transfer failed', {
+        amount,
+        fromUserId: senderId,
+        toUserId: receiverId,
+        reason: result.message
+      });
       // In a real scenario, you might want to send an ephemeral message to the sender
       // For now, we'll just log it.
     }
@@ -83,7 +103,10 @@ async function processWordleMessage(message) {
     try {
       await handleWordleMessage(message);
     } catch (error) {
-      console.error('Error handling Wordle message:', error);
+      structuredLog.error('Error handling Wordle message', {
+        error: error.message,
+        category: 'wordle'
+      });
     }
   } else {
     // Illegitimate Wordle message (spoof attempt)
@@ -93,7 +116,9 @@ async function processWordleMessage(message) {
     // Don't let the bot punish itself if something is misconfigured
     if (senderId === botId) return true;
 
-    console.log(`User ${senderId} tried to spoof a Wordle message.`);
+    structuredLog.wordle('Wordle spoofing attempt detected', {
+      userId: senderId
+    });
 
     // Publicly shame the user
     await message.channel.send(`Hey <@${senderId}>, nice try. Only the real Wordle bot can post results. I'm taking 10 GarryCoins for that.`);
@@ -101,9 +126,15 @@ async function processWordleMessage(message) {
     // Penalize the user
     const result = await transfer(senderId, botId, 10, 'attempted_hacking');
     if (result.success) {
-      console.log(`Successfully penalized ${senderId} 10 GarryCoins for spoofing.`);
+      structuredLog.wordle('Spoofing penalty applied', {
+        userId: senderId,
+        penalty: 10
+      });
     } else {
-      console.log(`Failed to penalize ${senderId}: ${result.message}`);
+      structuredLog.wordle('Spoofing penalty failed', {
+        userId: senderId,
+        reason: result.message
+      });
       if (result.message === 'insufficient_funds') {
         await message.channel.send(`...but you're too poor, so I'll let it slide. For now.`);
       }
@@ -122,7 +153,11 @@ client.on('messageCreate', async message => {
   try {
     await updateUserActivity(message.author.id);
   } catch (error) {
-    console.error(`Failed to update activity for ${message.author.id}:`, error);
+    structuredLog.error('Failed to update user activity', {
+      userId: message.author.id,
+      error: error.message,
+      category: 'database'
+    });
   }
 
   const now = Date.now();
@@ -137,15 +172,24 @@ client.on('messageCreate', async message => {
       lastGrantedTime = now;
       const result = await grant(randomUser.user_id, 1, 'lottery_grant');
       if (result.success) {
-        console.log(`Successfully granted 1 GarryCoin to user ${randomUser.user_id}.`);
+        structuredLog.lottery('Lottery grant successful', {
+          userId: randomUser.user_id,
+          amount: 1
+        });
       } else {
-        console.error(`Failed to grant GarryCoin to user ${randomUser.user_id}: ${result.message}`);
+        structuredLog.lottery('Lottery grant failed', {
+          userId: randomUser.user_id,
+          reason: result.message
+        });
       }
     } else {
-      console.log('No active users found for the lottery.');
+      structuredLog.lottery('No active users for lottery');
     }
   } catch (error) {
-    console.error('Error granting random GarryCoin:', error);
+    structuredLog.error('Lottery system error', {
+      error: error.message,
+      category: 'lottery'
+    });
   }
 });
 
@@ -155,7 +199,10 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     try {
       await newMessage.fetch();
     } catch (error) {
-      console.error('Failed to fetch partial message on update:', error);
+      structuredLog.error('Failed to fetch partial message on update', {
+        error: error.message,
+        category: 'bot'
+      });
       return;
     }
   }
