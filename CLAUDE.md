@@ -14,7 +14,7 @@
 - docker-compose.yml
 
 # saving session info
-If asked, you should modify this file (GEMINI.md) under the `# Memory`. Use the examples there to summarize what you have worked on in a way that will be helpful for future developers. Always append to this file, never delete. Adjust the length of your entry based on the amount of complexity / back and forth with the user. If you needed to be corrected or helped, be sure to focus on what was eventually said such that you were able to figure out the path forward.
+If asked, you should modify this file (CLAUDE.md) under the `# Memory`. Use the examples there to summarize what you have worked on in a way that will be helpful for future developers. Always append to this file, never delete. Adjust the length of your entry based on the amount of complexity / back and forth with the user. If you needed to be corrected or helped, be sure to focus on what was eventually said such that you were able to figure out the path forward.
 
 # planning
 Planning should be done as a synthesis with the user. To prevent you or the user from cheating
@@ -28,7 +28,7 @@ The point of this approach is to come to synthesis between you and the user.
 - Use TODO.md to track issues and features. This is to help you and your human handler.
 - If, at any point, you detect a discrepency between requests from the user or documentation in the project and what you are planning to do, add an issue to TODO.md to reconcile that difference.
 - Only work on issues or features in TODO.md if explicitly instructed to do so. Otherwise, follow the instructions of your handler
-- if you are corrected by your handler, add that correction to the # correections seciont of this file (GEMINI.md) so that you don't make the same mistake in the future format as:
+- if you are corrected by your handler, add that correction to the # correections seciont of this file (CLAUDE.md) so that you don't make the same mistake in the future format as:
 ```markdown
 ## Topic
 ### What I did wrong
