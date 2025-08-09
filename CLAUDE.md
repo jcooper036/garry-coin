@@ -363,3 +363,34 @@ This session focused on a major refactor of the `/heist` game's success chance c
     - A bug was identified where a target's `last_active_at` timestamp was being updated simply by being targeted in a heist. This was caused by the `db.transfer` function calling `findOrCreateUser`, which has a side effect of updating the timestamp.
     - This bug incorrectly applied the maximum activity penalty to users who were targeted multiple times in a row.
     - A fix was proposed to modify `db.transfer` to avoid this side effect, but the user opted to defer the fix and observe the current behavior after adjusting the formula's modifiers.
+
+## 2025-08-09 Session Summary (Structured Logging & Database Resilience)
+
+This session focused on housekeeping tasks including structured logging implementation and fixing production database connection issues.
+
+- **Heist Investigation**:
+    - User reported potential bug where bot wasn't losing coins during heist games.
+    - Comprehensive testing revealed the heist functionality was working correctly - the bot does lose coins when players win heists and gains coins when players fail.
+    - Created test scripts to verify transfer logic and confirmed all database transactions were properly recorded.
+
+- **Structured Logging Implementation**:
+    - **Problem**: Console logs were cluttered with noisy Knex pool state messages, making it difficult to find relevant information.
+    - **Solution**: Implemented winston-based structured JSON logging throughout the entire codebase.
+    - **Created `src/logger.js`**: Centralized logging configuration with category-based loggers (DATABASE, HEIST, TRANSFER, COMMAND, WORDLE, LOTTERY, etc.).
+    - **Converted all console.log/console.error calls**: Updated `src/index.js`, `src/bot.js`, `src/db.js`, and `src/wordle_handler.js` to use structured logging.
+    - **Benefits for Render**: JSON logs are now filterable by category, user ID, error type, etc. in Render's log aggregation system.
+    - **Reduced noise**: Eliminated verbose Knex pool logs, keeping only critical connection errors.
+
+- **Database Connection Resilience (Production Issue)**:
+    - **Problem**: Wordle handler failing at 12:47 AM with "Connection terminated unexpectedly" after long idle periods.
+    - **Root Cause**: Supabase session pooler terminating idle connections during low-activity periods, combined with aggressive pool timeout settings.
+    - **Solutions Applied**:
+        - **Enhanced Pool Configuration**: Increased `acquireTimeoutMillis` from 30s to 60s, `idleTimeoutMillis` from 30s to 5 minutes, reduced minimum connections to 1.
+        - **Improved Connection Validation**: Added timeout protection and enhanced validation queries with better error handling.
+        - **Structured Logging**: Converted Wordle handler to use structured logging for better debugging visibility.
+    - **Expected Results**: Fewer connection timeouts during idle periods, faster recovery from connection failures, better observability for debugging.
+
+- **Key Technical Insights**:
+    - Render's log aggregation works excellently with winston's JSON format, enabling powerful filtering and search capabilities.
+    - Database connection issues are often related to idle timeout settings rather than application logic.
+    - Structured logging provides significant value for production debugging and monitoring, especially with cloud-hosted applications.

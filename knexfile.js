@@ -76,12 +76,14 @@ module.exports = {
       },
     },
     pool: {
-      min: 2,
+      min: 1,
       max: 10,
-      acquireTimeoutMillis: 30000,
-      idleTimeoutMillis: 30000,
-      reapIntervalMillis: 1000,
+      acquireTimeoutMillis: 60000,     // Increased to 60s
+      idleTimeoutMillis: 300000,      // Increased to 5 minutes
+      reapIntervalMillis: 10000,      // Check every 10s instead of 1s
       propagateCreateError: false,
+      createTimeoutMillis: 30000,     // Add connection creation timeout
+      destroyTimeoutMillis: 5000,
       afterCreate: (conn, done) => {
         console.log('[Knex Pool] Connection created.');
         conn.on('error', err => {
@@ -91,10 +93,20 @@ module.exports = {
       },
       validate: (conn) => {
         return new Promise((resolve, reject) => {
-          conn.query('SELECT 1', (err) => {
+          // Set a timeout for validation query
+          const timeout = setTimeout(() => {
+            reject(new Error('Connection validation timeout'));
+          }, 5000);
+
+          conn.query('SELECT 1 as ping', (err, result) => {
+            clearTimeout(timeout);
             if (err) {
               console.error('[Knex Pool] Connection validation failed:', err);
               return reject(err);
+            }
+            // Additional check to ensure the connection is truly working
+            if (!result || !result.rows || result.rows.length === 0) {
+              return reject(new Error('Invalid validation response'));
             }
             resolve();
           });
