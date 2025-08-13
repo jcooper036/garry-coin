@@ -445,3 +445,32 @@ This session focused on implementing comprehensive gambling statistics and fixin
     - **Competitive Elements**: Leaderboards encourage engagement and friendly competition
     - **Comprehensive Analysis**: Covers all aspects of gambling activity with detailed breakdowns
     - **User-Friendly**: Clear formatting, helpful context, and engaging presentation
+
+## 2025-08-13 Session Summary (Gambling Statistics Win Rate Bug Fix)
+
+This session focused on diagnosing and fixing a critical bug in the gambling statistics that was showing impossible win rates >100%.
+
+- **Problem Identification**: User reported seeing a 333.33% heist win rate and 116% overall win rate, which is mathematically impossible. Investigation revealed the root cause was in the `getGamblingStats` function in `src/db.js`.
+
+- **Root Cause Analysis**: The original logic was flawed because it counted games and wins from transaction types rather than actual game instances:
+    - **RTB & Wavelength**: Each game creates both a wager transaction AND a win transaction, but the function was counting these as separate "games"
+    - **Transaction Mismatch**: If there were timing issues, data corruption, or missing transactions, you could end up with more win transactions than wager transactions
+    - **Example**: 3 `rtb_win_*` transactions + 1 `rtb_wager` transaction = 3/1 = 300% win rate
+
+- **Solution Implementation**: Completely refactored the `getGamblingStats` function to use proper data sources:
+    - **RTB (Ride the Bus)**: Now uses `bus_games` and `bus_game_players` tables to count actual finished games and players who 'cashed_out'
+    - **Wavelength**: Initially tried to use `wavelength_games` and `wavelength_players` tables, but discovered the game table doesn't properly track winners (only 'joined' and 'guessed' statuses, no 'winner' status)
+    - **Heist**: Kept transaction-based counting since there's no dedicated game table
+    - **Wavelength Fallback**: Reverted to transaction-based counting for Wavelength since the game table data was unreliable
+
+- **Technical Details**:
+    - **Games Played**: Now correctly counts unique game instances from game tables, not transaction counts
+    - **Wins**: Uses proper status fields ('cashed_out' for RTB) or transaction counts where game tables don't track winners
+    - **Wagered/Won Amounts**: Still sourced from transaction amounts for accuracy
+
+- **Results**: Win rates now show realistic values:
+    - **Before**: Heist 100% win rate, RTB/Wavelength inflated rates 
+    - **After**: Heist 50% win rate, RTB 27.8% win rate, Wavelength 12% win rate
+    - **Data Consistency**: Wagered amounts, profits, and win rates now align logically
+
+- **Key Insight**: Game statistics should always be derived from the authoritative data source. For games with proper game tables that track outcomes, use those tables. For games without proper winner tracking, fall back to transaction analysis, but ensure the counting methodology is consistent between games and wins.
