@@ -18,6 +18,7 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_REPO_OWNER=${GITHUB_REPO_OWNER}
       - GITHUB_REPO_NAME=${GITHUB_REPO_NAME}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - ./src:/usr/src/app/src
       - ./assets:/usr/src/app/assets
