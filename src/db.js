@@ -427,6 +427,15 @@ module.exports = {
   // Gambling Stats
   getGamblingStats,
   getGamblingLeaderboard,
+  // Federal GarryCoin Reserve
+  recordFGREvent,
+  getFGREvents,
+  castFGRVote,
+  getFGRVotes,
+  createFGRPolicy,
+  getFGRPolicy,
+  updateFGRPolicy,
+  getEconomicMetrics,
 };
 
 // --- Ride the Bus Functions
@@ -606,4 +615,163 @@ async function processWordleTransaction(userId, tries, amount, isCheater, transa
     });
   }));
 }
-''
+
+// --- Federal GarryCoin Reserve Functions ---
+
+async function recordFGREvent(eventType, description, eventData = {}, coinsDistributed = 0, usersAffected = 0) {
+  return withRetry(() => db('fgr_events').insert({
+    event_type: eventType,
+    description,
+    event_data: eventData,
+    coins_distributed: coinsDistributed,
+    users_affected: usersAffected
+  }).returning('*'));
+}
+
+async function getFGREvents(limit = 10) {
+  return withRetry(() => db('fgr_events')
+    .orderBy('created_at', 'desc')
+    .limit(limit));
+}
+
+async function castFGRVote(userId, policyType, voteChoice) {
+  return withRetry(() => db('fgr_votes')
+    .insert({
+      user_id: userId,
+      policy_type: policyType,
+      vote_choice: voteChoice
+    })
+    .onConflict(['policy_type', 'user_id'])
+    .merge(['vote_choice', 'created_at'])
+    .returning('*'));
+}
+
+async function getFGRVotes(policyType) {
+  return withRetry(() => db('fgr_votes')
+    .where({ policy_type: policyType })
+    .orderBy('created_at', 'desc'));
+}
+
+async function createFGRPolicy(policyName, policyData = {}, expiresAt = null) {
+  return withRetry(() => db('fgr_policies').insert({
+    policy_name: policyName,
+    policy_data: policyData,
+    expires_at: expiresAt
+  }).returning('*'));
+}
+
+async function getFGRPolicy(policyName) {
+  return withRetry(() => db('fgr_policies')
+    .where({ policy_name: policyName, status: 'active' })
+    .first());
+}
+
+async function updateFGRPolicy(policyName, updates) {
+  return withRetry(() => db('fgr_policies')
+    .where({ policy_name: policyName })
+    .update(updates));
+}
+
+async function getEconomicMetrics() {
+  return withRetry(async () => {
+    // Get overall gambling metrics for economic analysis
+    const [
+      totalUsers,
+      activeUsers,
+      totalBalance,
+      recentTransactions,
+      gamblingVolume,
+      heistStats,
+      rtbStats,
+      wavelengthStats
+    ] = await Promise.all([
+      // Total registered users
+      db('users').count('* as count').first(),
+      
+      // Active users (last 7 days)
+      db('users')
+        .where('last_active_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        .count('* as count')
+        .first(),
+      
+      // Total GarryCoin in circulation
+      db('users').sum('balance as total').first(),
+      
+      // Recent transaction volume (last 24 hours)
+      db('transactions')
+        .where('created_at', '>=', new Date(Date.now() - 24 * 60 * 60 * 1000))
+        .count('* as count')
+        .first(),
+      
+      // Total gambling volume (last 7 days)
+      db('transactions')
+        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        .whereIn('transaction_type', ['heist_loss', 'rtb_wager', 'wavelength_wager'])
+        .sum('amount as total')
+        .first(),
+      
+      // Heist metrics
+      db('transactions')
+        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        .where('transaction_type', 'like', 'heist_%')
+        .select(
+          db.raw('COUNT(*) as total_games'),
+          db.raw('SUM(CASE WHEN transaction_type = \'heist_win\' THEN 1 ELSE 0 END) as wins'),
+          db.raw('SUM(CASE WHEN transaction_type = \'heist_loss\' THEN amount ELSE 0 END) as volume')
+        )
+        .first(),
+      
+      // RTB metrics
+      db('bus_games')
+        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        .where('status', 'finished')
+        .select(
+          db.raw('COUNT(*) as games'),
+          db.raw('AVG(wager) as avg_wager'),
+          db.raw('SUM(wager) as total_volume')
+        )
+        .first(),
+      
+      // Wavelength metrics
+      db('wavelength_games')
+        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        .where('status', 'finished')
+        .select(
+          db.raw('COUNT(*) as games'),
+          db.raw('AVG(wager) as avg_wager'),
+          db.raw('SUM(wager) as total_volume')
+        )
+        .first()
+    ]);
+
+    return {
+      userMetrics: {
+        totalUsers: parseInt(totalUsers.count),
+        activeUsers: parseInt(activeUsers.count),
+        activityRate: totalUsers.count > 0 ? (activeUsers.count / totalUsers.count * 100) : 0
+      },
+      economicMetrics: {
+        totalSupply: parseInt(totalBalance.total || 0),
+        recentTransactionVolume: parseInt(recentTransactions.count),
+        weeklyGamblingVolume: parseInt(gamblingVolume.total || 0)
+      },
+      gameMetrics: {
+        heist: {
+          games: parseInt(heistStats.total_games || 0),
+          winRate: heistStats.total_games > 0 ? (heistStats.wins / heistStats.total_games * 100) : 0,
+          volume: parseInt(heistStats.volume || 0)
+        },
+        rtb: {
+          games: parseInt(rtbStats.games || 0),
+          avgWager: parseFloat(rtbStats.avg_wager || 0),
+          volume: parseInt(rtbStats.total_volume || 0)
+        },
+        wavelength: {
+          games: parseInt(wavelengthStats.games || 0),
+          avgWager: parseFloat(wavelengthStats.avg_wager || 0),
+          volume: parseInt(wavelengthStats.total_volume || 0)
+        }
+      }
+    };
+  });
+}

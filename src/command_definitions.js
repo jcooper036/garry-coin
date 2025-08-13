@@ -192,6 +192,60 @@ const commands = [
         ]
       }
     ]
+  },
+  {
+    name: 'garryreservevote',
+    description: 'Vote on Federal GarryCoin Reserve monetary policy.',
+    options: [
+      {
+        name: 'policy',
+        description: 'Policy to vote on.',
+        type: 3, // STRING type
+        required: true,
+        choices: [
+          {
+            name: 'Hawkish Rate Stance - Tighten monetary policy',
+            value: 'hawkish'
+          },
+          {
+            name: 'Dovish Stimulus - Expand monetary policy',
+            value: 'dovish'
+          },
+          {
+            name: 'Quantitative Tightening - Reduce market liquidity',
+            value: 'qt'
+          },
+          {
+            name: 'Emergency Accommodation - Crisis response measures',
+            value: 'emergency'
+          }
+        ]
+      },
+      {
+        name: 'vote',
+        description: 'Your vote.',
+        type: 3, // STRING type
+        required: true,
+        choices: [
+          {
+            name: 'Support',
+            value: 'yes'
+          },
+          {
+            name: 'Oppose',
+            value: 'no'
+          },
+          {
+            name: 'Abstain',
+            value: 'abstain'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'garryreservereport',
+    description: 'View the Federal GarryCoin Reserve economic analysis report.'
   }
 ];
 

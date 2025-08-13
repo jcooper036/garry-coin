@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const { transfer, grant, updateUserActivity, getRandomActiveUser } = require('./db');
 const { handleWordleMessage } = require('./wordle_handler');
 const { structuredLog } = require('./logger');
+const { FGREvents } = require('./fgr_events');
 
 const WORDLE_BOT_IDS = (process.env.WORDLE_BOT_IDS || '').split(',');
 
@@ -24,6 +25,10 @@ const GARRYCOIN_EMOJIS = {
 
 client.once('ready', () => {
   structuredLog.bot('Bot logged in', { tag: client.user.tag });
+  
+  // Initialize Federal GarryCoin Reserve events system
+  const fgrEvents = new FGREvents(client);
+  fgrEvents.start();
 });
 
 client.on('messageReactionAdd', async (reaction, user) => {
