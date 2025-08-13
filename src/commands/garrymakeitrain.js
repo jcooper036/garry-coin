@@ -16,19 +16,11 @@ module.exports = {
       };
     }
 
-    let successCount = 0;
-    for (const member of members.values()) {
-      if (member.user.bot || member.user.id === senderId) continue;
-
-      await findOrCreateUser(member.user.id);
-      const result = await transfer(senderId, member.user.id, 1, 'user_to_user_make_it_rain');
-      if (result.success) {
-        successCount++;
-      }
-    }
-
+    // Return special flag to trigger deferred processing
     return {
-      content: `You have made it rain on ${successCount} members of the server!`,
+      postProcess: 'make_it_rain',
+      senderId,
+      members,
       ephemeral: false,
     };
   },
