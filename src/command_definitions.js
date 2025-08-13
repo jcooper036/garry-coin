@@ -246,6 +246,36 @@ const commands = [
   {
     name: 'garryreservereport',
     description: 'View the Federal GarryCoin Reserve economic analysis report.'
+  },
+  {
+    name: 'garryloan',
+    description: 'Request a loan from the GarryCoinBot or another user.',
+    options: [
+      {
+        name: 'amount',
+        description: 'The amount of GarryCoins to borrow.',
+        type: 4, // INTEGER type
+        required: true,
+      },
+      {
+        name: 'lender',
+        description: 'The user to request a loan from (defaults to the bot).',
+        type: 6, // USER type
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'garrycreditreport',
+    description: 'View credit score and loan information for yourself or another user.',
+    options: [
+      {
+        name: 'user',
+        description: 'The user to view the credit report for (defaults to yourself).',
+        type: 6, // USER type
+        required: false,
+      },
+    ],
   }
 ];
 

@@ -4,6 +4,7 @@ const { transfer, grant, updateUserActivity, getRandomActiveUser } = require('./
 const { handleWordleMessage } = require('./wordle_handler');
 const { structuredLog } = require('./logger');
 const { FGREvents } = require('./fgr_events');
+const { LoanScheduler } = require('./loan_scheduler');
 
 const WORDLE_BOT_IDS = (process.env.WORDLE_BOT_IDS || '').split(',');
 
@@ -29,6 +30,10 @@ client.once('ready', () => {
   // Initialize Federal GarryCoin Reserve events system
   const fgrEvents = new FGREvents(client);
   fgrEvents.start();
+  
+  // Initialize Loan Payment Scheduler
+  const loanScheduler = new LoanScheduler(client);
+  loanScheduler.start();
 });
 
 client.on('messageReactionAdd', async (reaction, user) => {

@@ -17,7 +17,13 @@
     "test-fgr-announcement": "node src/fgr_cli.js announcement",
     "test-fgr-metrics": "node src/fgr_cli.js metrics",
     "test-fgr-llm": "node src/fgr_cli.js test-llm",
-    "test-fgr-all": "node src/fgr_cli.js test-all"
+    "test-fgr-all": "node src/fgr_cli.js test-all",
+    "test-loan-credit": "node src/loan_cli.js credit-score",
+    "test-loan-create": "node src/loan_cli.js create-loan",
+    "test-loan-list": "node src/loan_cli.js list-active-loans",
+    "test-loan-pay": "node src/loan_cli.js pay-loan",
+    "test-loan-rate": "node src/loan_cli.js get-interest-rate",
+    "test-loan-all": "node src/loan_cli.js test-all"
   },
   "dependencies": {
     "@google/genai": "^1.13.0",

@@ -436,6 +436,16 @@ module.exports = {
   getFGRPolicy,
   updateFGRPolicy,
   getEconomicMetrics,
+  // Loan System
+  calculateCreditScore,
+  createLoan,
+  getUserLoans,
+  getActiveLoan,
+  getAllActiveLoans,
+  payLoan,
+  checkDailyLoanLimit,
+  getLoanHistory,
+  updateCreditScore,
 };
 
 // --- Ride the Bus Functions
@@ -774,4 +784,240 @@ async function getEconomicMetrics() {
       }
     };
   });
+}
+
+// --- Loan System Functions ---
+
+async function calculateCreditScore(userId) {
+  return withRetry(async () => {
+    const user = await db('users').where({ user_id: userId }).first();
+    if (!user) return 500; // Default score for new users
+
+    const gamblingStats = await getGamblingStats(userId);
+    const loanHistory = await getLoanHistory(userId);
+
+    // Balance Factor (40%): (balance / 100) * 10, capped at 100 points
+    const balanceFactor = Math.min((Math.max(user.balance, 0) / 100) * 10, 100);
+
+    // Gambling Win Rate Factor (30%): win_rate * 3 (0-100% = 0-300 points)
+    const winRate = gamblingStats.overall.winRate || 0;
+    const winRateFactor = winRate * 3;
+
+    // Loan History Factor (30%)
+    let loanHistoryFactor = 100; // Default for no history
+    if (loanHistory.totalLoans > 0) {
+      const debtEventRate = loanHistory.debtEvents / loanHistory.totalLoans;
+      if (debtEventRate === 0) {
+        loanHistoryFactor = 150; // Perfect repayment
+      } else if (debtEventRate <= 0.2) {
+        loanHistoryFactor = 75; // Some debt events
+      } else {
+        loanHistoryFactor = 25; // Multiple debt events
+      }
+    }
+
+    // Calculate final score (300-850 range)
+    const rawScore = balanceFactor + winRateFactor + loanHistoryFactor;
+    const creditScore = Math.max(300, Math.min(850, Math.floor(rawScore + 300)));
+
+    // Update the credit score in the database
+    await db('users').where({ user_id: userId }).update({ credit_score: creditScore });
+
+    return creditScore;
+  });
+}
+
+async function createLoan(borrowerId, lenderId, amount, interestRate) {
+  return withRetry(() => db.transaction(async trx => {
+    // Check if borrower has too many active loans (max 10)
+    const activeLoans = await trx('loans')
+      .where({ borrower_user_id: borrowerId, status: 'active' })
+      .count('* as count')
+      .first();
+
+    if (parseInt(activeLoans.count) >= 10) {
+      return { success: false, message: 'max_active_loans_exceeded' };
+    }
+
+    // Create the loan record
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 3); // 3 days from now
+
+    const [loan] = await trx('loans').insert({
+      borrower_user_id: borrowerId,
+      lender_user_id: lenderId,
+      amount: amount,
+      interest_rate: interestRate,
+      due_date: dueDate
+    }).returning('*');
+
+    // Transfer the money from lender to borrower
+    if (lenderId === 'garry_bot') {
+      // Bot loan - use grant function
+      await grant(borrowerId, amount, 'loan_disbursement', trx);
+    } else {
+      // User-to-user loan - use transfer function
+      const transferResult = await transfer(lenderId, borrowerId, amount, 'loan_disbursement');
+      if (!transferResult.success) {
+        throw new Error(`Transfer failed: ${transferResult.message}`);
+      }
+    }
+
+    structuredLog.loan('Loan created', {
+      loanId: loan.id,
+      borrowerId,
+      lenderId,
+      amount,
+      interestRate,
+      dueDate
+    });
+
+    return { success: true, loan: loan };
+  }));
+}
+
+async function getUserLoans(userId, status = null) {
+  return withRetry(() => {
+    let query = db('loans').where({ borrower_user_id: userId });
+    if (status) {
+      query = query.where({ status });
+    }
+    return query.orderBy('created_at', 'desc');
+  });
+}
+
+async function getActiveLoan(loanId) {
+  return withRetry(() => db('loans').where({ id: loanId, status: 'active' }).first());
+}
+
+async function getAllActiveLoans() {
+  return withRetry(() => db('loans').where({ status: 'active' }));
+}
+
+async function payLoan(loanId) {
+  return withRetry(() => db.transaction(async trx => {
+    const loan = await trx('loans').where({ id: loanId }).first();
+    if (!loan || loan.status !== 'active') {
+      return { success: false, message: 'loan_not_found_or_not_active' };
+    }
+
+    const borrower = await trx('users').where({ user_id: loan.borrower_user_id }).first();
+    if (!borrower) {
+      return { success: false, message: 'borrower_not_found' };
+    }
+
+    // Calculate total amount due (principal + interest)
+    const interestAmount = Math.floor(loan.amount * (loan.interest_rate / 100));
+    const totalDue = loan.amount + interestAmount;
+
+    let wentIntoDebt = false;
+    let actualPayment = Math.min(borrower.balance, totalDue);
+
+    if (borrower.balance < totalDue) {
+      // User doesn't have enough money - they'll go into debt
+      wentIntoDebt = true;
+      
+      // Check if this would exceed debt limit (-1000 GC)
+      const newBalance = borrower.balance - totalDue;
+      if (newBalance < -1000) {
+        // Can only pay what doesn't exceed debt limit
+        actualPayment = borrower.balance + 1000;
+        structuredLog.loan('Loan payment limited by debt ceiling', {
+          loanId,
+          borrowerId: loan.borrower_user_id,
+          requestedPayment: totalDue,
+          actualPayment,
+          newBalance: -1000
+        });
+      }
+    }
+
+    // Update borrower balance
+    await trx('users')
+      .where({ user_id: loan.borrower_user_id })
+      .decrement('balance', actualPayment);
+
+    // Update lender balance (if not bot)
+    if (loan.lender_user_id !== 'garry_bot') {
+      await trx('users')
+        .where({ user_id: loan.lender_user_id })
+        .increment('balance', actualPayment);
+    }
+
+    // Record the payment transaction
+    await trx('transactions').insert({
+      sending_user_id: loan.borrower_user_id,
+      receiving_user_id: loan.lender_user_id,
+      amount: actualPayment,
+      transaction_type: 'loan_payment'
+    });
+
+    // Update loan status
+    const loanStatus = actualPayment >= totalDue ? 'paid' : 'defaulted';
+    await trx('loans')
+      .where({ id: loanId })
+      .update({
+        status: loanStatus,
+        amount_paid: actualPayment,
+        went_into_debt: wentIntoDebt
+      });
+
+    structuredLog.loan('Loan payment processed', {
+      loanId,
+      borrowerId: loan.borrower_user_id,
+      totalDue,
+      actualPayment,
+      wentIntoDebt,
+      status: loanStatus
+    });
+
+    return {
+      success: true,
+      paid_amount: actualPayment,
+      total_due: totalDue,
+      went_into_debt: wentIntoDebt,
+      status: loanStatus
+    };
+  }));
+}
+
+async function checkDailyLoanLimit(userId) {
+  return withRetry(async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayLoans = await db('loans')
+      .where({ borrower_user_id: userId })
+      .where('created_at', '>=', today)
+      .where('created_at', '<', tomorrow)
+      .count('* as count')
+      .first();
+
+    return parseInt(todayLoans.count) >= 1;
+  });
+}
+
+async function getLoanHistory(userId) {
+  return withRetry(async () => {
+    const loans = await db('loans').where({ borrower_user_id: userId });
+    
+    const totalLoans = loans.length;
+    const paidLoans = loans.filter(l => l.status === 'paid').length;
+    const defaultedLoans = loans.filter(l => l.status === 'defaulted').length;
+    const debtEvents = loans.filter(l => l.went_into_debt).length;
+
+    return {
+      totalLoans,
+      paidLoans,
+      defaultedLoans,
+      debtEvents,
+      onTimePayments: paidLoans - debtEvents
+    };
+  });
+}
+
+async function updateCreditScore(userId) {
+  return calculateCreditScore(userId);
 }

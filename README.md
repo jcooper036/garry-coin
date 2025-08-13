@@ -26,6 +26,8 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 - `/garrymakeitrain` - (public) Gives one GarryCoin to every other member of the server. (Secret feature: If the user doesn't have enough coins, it mocks them publicly for being too poor).
 - `/garryhistory @user` - (public) Shows the last 10 transactions for the stated user. By default this is the user making the request.
 - `/garrysend X @user` - (public) Sends X GarryCoins to the target user publicly.
+- `/garryloan amount @lender` - (ephemeral) Request a loan from the GarryCoinBot (default) or another user. Interest rates determined by credit score and Federal GarryCoin Reserve policy.
+- `/garrycreditreport @user` - (ephemeral) View credit score and loan information. Shows detailed breakdown for yourself, summary for others.
 
 
 # Roadmap
@@ -34,10 +36,11 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 ### Completed
 #### Features
 - leader boards for gambling games
-- Federal GarryCoin Resvere (FGR)
+- Federal GarryCoin Reserve (FGR)
+- GarryCoin loan system with credit scores
 #### Bug fixes
-- harded database pooling timeouts
-- widespread defered messaging to avoid discord timeouts
+- hardened database pooling timeouts
+- widespread deferred messaging to avoid discord timeouts
 
 ## 2.0.0 - 2025-08-01
 ### Completed
