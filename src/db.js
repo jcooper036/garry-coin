@@ -126,14 +126,23 @@ async function recordTransaction(sending_user_id, receiving_user_id, amount, tra
 }
 
 async function grant(receiverId, amount, transaction_type, trx) {
-  const db_conn = trx || db;
-  return db_conn.transaction(async trx => {
-    await findOrCreateUser(receiverId, trx);
+  if (trx) {
+    // Use existing transaction
+    await findOrCreateUser(receiverId);
     await trx('users').where({ user_id: receiverId }).increment('balance', amount);
     const senderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
     await recordTransaction(senderId, receiverId, amount, transaction_type, trx);
     return { success: true, message: 'Grant successful.' };
-  });
+  } else {
+    // Create new transaction
+    return db.transaction(async trx => {
+      await findOrCreateUser(receiverId);
+      await trx('users').where({ user_id: receiverId }).increment('balance', amount);
+      const senderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
+      await recordTransaction(senderId, receiverId, amount, transaction_type, trx);
+      return { success: true, message: 'Grant successful.' };
+    });
+  }
 }
 
 async function getGamblingStats(userId) {
@@ -839,9 +848,17 @@ async function createLoan(borrowerId, lenderId, amount, interestRate) {
       return { success: false, message: 'max_active_loans_exceeded' };
     }
 
-    // Create the loan record
+    // Create the loan record with environment-dependent due date
     const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 3); // 3 days from now
+    const environment = process.env.NODE_ENV || 'development';
+    
+    if (environment === 'development') {
+      // Development: 5 minutes for quick testing
+      dueDate.setMinutes(dueDate.getMinutes() + 5);
+    } else {
+      // Production: 3 days
+      dueDate.setDate(dueDate.getDate() + 3);
+    }
 
     const [loan] = await trx('loans').insert({
       borrower_user_id: borrowerId,
@@ -983,6 +1000,18 @@ async function payLoan(loanId) {
 
 async function checkDailyLoanLimit(userId) {
   return withRetry(async () => {
+    // First check if user has any outstanding loans
+    const outstandingLoans = await db('loans')
+      .where({ borrower_user_id: userId, status: 'active' })
+      .count('* as count')
+      .first();
+
+    // If no outstanding loans, allow new loan regardless of daily limit
+    if (parseInt(outstandingLoans.count) === 0) {
+      return false;
+    }
+
+    // If user has outstanding loans, check daily limit
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);

@@ -14,7 +14,7 @@ CREATE TABLE loans (
   amount INTEGER NOT NULL,
   interest_rate DECIMAL(5,2) NOT NULL,   -- e.g., 5.50 for 5.5%
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  due_date TIMESTAMP NOT NULL,           -- 3 days from creation
+  due_date TIMESTAMP NOT NULL,           -- Environment dependent: 5 minutes (dev) or 3 days (prod)
   status VARCHAR(50) DEFAULT 'active',   -- 'active', 'paid', 'defaulted'
   amount_paid INTEGER DEFAULT 0,
   went_into_debt BOOLEAN DEFAULT FALSE   -- for credit score calculation
@@ -86,15 +86,17 @@ function botLoanDecision(userId, amount) {
 - `lender` (optional): Target lender user (defaults to bot)
 
 **Behavior:**
-- Check daily limit (one loan request per day per user)
-- For bot loans: Apply approval algorithm
-- For user loans: Send loan request (auto-approve if user has sufficient funds)
-- Create loan record with 3-day due date
+- Check loan request eligibility (daily limit OR no outstanding loans)
+- For bot loans: Apply approval algorithm with credit score evaluation
+- For user loans: Auto-approve if lender has sufficient funds
+- Create loan record with environment-dependent due date
 - Apply current FGR interest rate with credit score adjustment
+- Transfer funds immediately upon approval
 
 **Rate Limiting:**
-- One loan request per user per day
-- Ephemeral message for subsequent attempts: "You've already requested a loan today. Try again tomorrow."
+- One loan request per user per day, OR if user has no outstanding loans
+- Users can request a new loan immediately after paying off all existing loans
+- Ephemeral message for rate-limited attempts: "You've already requested a loan today and have outstanding loans. Pay off your current loans or try again tomorrow."
 
 ### `/garrycreditreport`
 **Parameters:**
@@ -115,7 +117,8 @@ function botLoanDecision(userId, amount) {
 - `/garryreservevote` results influence rate adjustments
 
 ### Automated Payment System:
-- Scheduled job runs every hour checking for due loans
+- **Production**: Scheduled job runs every hour checking for due loans, 3-day loan terms
+- **Development**: Scheduled job runs every 30 seconds, 5-minute loan terms for rapid testing
 - Auto-deduct from borrower account up to loan amount + interest
 - Handle insufficient funds by allowing negative balance (debt)
 - Update loan status and credit history accordingly
@@ -132,12 +135,12 @@ function botLoanDecision(userId, amount) {
 6. If denied: Explains reason (credit score, amount too high, etc.)
 
 ### Payment Process:
-1. Loan comes due after 3 days
-2. Automated system attempts payment
-3. If successful: Updates loan status, sends confirmation
-4. If insufficient funds: User goes into debt, affects credit score
-5. Credit report shows updated information
-6. Sends the user an ephemeral message about the loan resolution
+1. Loan comes due after environment-dependent period (5 min dev / 3 days prod)
+2. Automated system attempts payment every 30 seconds (dev) or 1 hour (prod)
+3. If successful: Updates loan status, sends notification via DM or channel
+4. If insufficient funds: User goes into debt (up to -1000 GC limit), affects credit score
+5. Credit report shows updated information with debt events tracked
+6. Sends properly formatted notification about loan resolution
 
 ## Error Handling
 
@@ -155,10 +158,11 @@ function botLoanDecision(userId, amount) {
 ## Security Considerations
 
 ### Anti-Abuse Measures:
-- Daily loan request limit prevents spam
-- Credit score prevents unlimited borrowing
-- Debt limit prevents infinite negative balances
-- Audit trail in transactions table
+- Flexible loan request limit: daily limit OR no outstanding loans (encourages payoff)
+- Credit score-based risk assessment prevents unlimited borrowing
+- Maximum 10 active loans per user
+- Debt limit of -1000 GC prevents infinite negative balances
+- Comprehensive audit trail in transactions and loans tables
 
 ### Data Privacy:
 - Credit reports are ephemeral (private) by default
@@ -184,15 +188,16 @@ function botLoanDecision(userId, amount) {
 - Automated payment system performance
 - Database query optimization
 
-## Implementation Timeline
+## Implementation Status
 
-1. **Database Migration** - Create loans table, add credit_score column
-2. **Core Functions** - Credit score calculation, loan approval logic
-3. **Commands Implementation** - `/garryloan` and `/garrycreditreport`
-4. **FGR Integration** - Interest rate policy management
-5. **Automated Payments** - Scheduled job for loan processing
-6. **Testing & Validation** - Comprehensive test suite
-7. **Documentation** - User guides and technical documentation
+✅ **Database Migration** - Created loans table with proper indexing, added credit_score column
+✅ **Core Functions** - Credit score calculation, loan approval logic with risk assessment
+✅ **Commands Implementation** - `/garryloan` and `/garrycreditreport` with postProcess pattern
+✅ **FGR Integration** - Interest rate policy management integrated with existing FGR system
+✅ **Automated Payments** - LoanScheduler with environment-dependent timing and notifications
+✅ **Testing & Validation** - Comprehensive CLI test suite with npm scripts
+✅ **Documentation** - Updated README and technical documentation
+✅ **Production Deployment** - Commands registered and functional on test server
 
 ## Success Metrics
 
@@ -209,5 +214,28 @@ function botLoanDecision(userId, amount) {
 - Database performance metrics
 
 ---
+
+## Technical Implementation Details
+
+### Discord Integration:
+- Commands use project's postProcess pattern for complex operations
+- Deferred responses prevent Discord timeout issues
+- Proper message formatting with newlines (not escaped \\n)
+- Error handling with fallback responses
+
+### Environment Configuration:
+- **Development**: 5-minute loan terms, 30-second payment checks for rapid testing
+- **Production**: 3-day loan terms, 1-hour payment checks for normal operation
+- Automatic environment detection via NODE_ENV
+
+### Database Optimizations:
+- Nested transaction handling fixed for grant() function
+- Proper connection pooling with retry logic
+- Indexed queries for performance on loans and users tables
+
+### Testing Infrastructure:
+- CLI commands: `npm run test-loan-*` for all loan operations
+- Integration with existing FGR test suite
+- Comprehensive logging with structured categories
 
 This architecture provides a robust, scalable loan system that integrates seamlessly with the existing GarryCoin ecosystem while maintaining the project's playful and engaging nature.

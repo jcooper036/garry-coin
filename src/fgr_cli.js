@@ -40,6 +40,11 @@ class FGRCLI {
           await this.testAnnouncement();
           break;
 
+        case 'interest-rates':
+        case 'rates':
+          await this.testInterestRates(args[0]);
+          break;
+
         case 'metrics':
           await this.showMetrics();
           break;
@@ -116,6 +121,50 @@ class FGRCLI {
     this.fgrEvents.broadcastAnnouncement = originalBroadcast;
 
     console.log('✅ Policy Announcement test completed');
+  }
+
+  async testInterestRates(policyType) {
+    console.log('📈 Testing Interest Rate Adjustment...\n');
+    
+    const validPolicies = ['dovish', 'hawkish', 'qt', 'emergency'];
+    const selectedPolicy = policyType && validPolicies.includes(policyType) 
+      ? policyType 
+      : validPolicies[Math.floor(Math.random() * validPolicies.length)];
+
+    console.log(`Selected Policy Stance: ${selectedPolicy.toUpperCase()}\n`);
+
+    // Get current metrics and rates
+    const metrics = await getEconomicMetrics();
+    const { getFGRPolicy } = require('./db');
+    const currentPolicy = await getFGRPolicy('base_interest_rate');
+    const currentRate = currentPolicy ? parseFloat(currentPolicy.policy_data.rate || 5.0) : 5.0;
+
+    console.log(`Current Interest Rate: ${currentRate.toFixed(2)}%\n`);
+    
+    console.log('Economic Conditions:');
+    console.log(`  Activity Rate: ${metrics.userMetrics.activityRate.toFixed(1)}%`);
+    console.log(`  Weekly Gambling Volume: ${metrics.economicMetrics.weeklyGamblingVolume} GC`);
+    console.log(`  Total Supply: ${metrics.economicMetrics.totalSupply.toLocaleString()} GC\n`);
+
+    // Test the rate adjustment
+    const rateAdjustment = await this.fgrEvents.adjustInterestRates(metrics, selectedPolicy, 'CLI testing');
+    
+    console.log('📊 Rate Adjustment Result:');
+    console.log(`  Rate Changed: ${rateAdjustment.changed ? 'YES' : 'NO'}`);
+    
+    if (rateAdjustment.changed) {
+      const direction = rateAdjustment.newRate > rateAdjustment.oldRate ? '📈 INCREASED' : '📉 DECREASED';
+      console.log(`  Direction: ${direction}`);
+      console.log(`  Old Rate: ${rateAdjustment.oldRate.toFixed(2)}%`);
+      console.log(`  New Rate: ${rateAdjustment.newRate.toFixed(2)}%`);
+      console.log(`  Change: ${(rateAdjustment.newRate - rateAdjustment.oldRate >= 0 ? '+' : '')}${(rateAdjustment.newRate - rateAdjustment.oldRate).toFixed(2)}%`);
+    } else {
+      console.log(`  Current Rate: ${rateAdjustment.currentRate.toFixed(2)}%`);
+    }
+    
+    console.log(`  Rationale: ${rateAdjustment.rationale}\n`);
+
+    console.log('✅ Interest Rate test completed');
   }
 
   async showMetrics() {
@@ -200,12 +249,14 @@ class FGRCLI {
   }
 
   showHelp() {
-    console.log(`Usage: node src/fgr_cli.js <command>
+    console.log(`Usage: node src/fgr_cli.js <command> [args]
 
 Commands:
   quantitative-easing, qe  Test QE event generation
   buyback                  Test strategic buyback event
   announcement             Test policy announcement
+  interest-rates, rates    Test interest rate adjustment [policy]
+                          Policy options: dovish, hawkish, qt, emergency
   metrics                  Show current economic metrics
   test-llm                 Test LLM integration
   test-all                 Run all tests

@@ -178,3 +178,16 @@ Comprehensive analytics system and Discord timeout fixes:
 - **Win Rate Bug Fix**: Corrected impossible >100% win rates by distinguishing game instances from transaction counts
 - **User Features**: `/garrygamblingstats` for personal analysis, `/garrygamblingboard` with profit/volume/winrate leaderboards
 - **Key Insight**: Game statistics must use proper data sources - game tables for instances, transaction tables for amounts
+
+## 2025-08-13 Session Summary (Loan System & FGR Reserve Report Fixes)
+
+Comprehensive loan system implementation and critical bug fixes:
+- **Loan System Architecture**: Complete implementation with `/garryloan` and `/garrycreditreport` commands, FICO-style credit scoring (300-850), risk-based approval algorithm
+- **Database Schema**: New `loans` table with environment-dependent timing (5 min dev, 3 days prod), credit_score column added to users
+- **FGR Integration**: Automatic interest rate adjustments (5%-50%) based on policy stance, loan rates adjust with credit scores
+- **Automated Payments**: LoanScheduler with debt handling, comprehensive notification system, proper transaction management
+- **Testing Infrastructure**: Complete CLI test suite (`npm run test-loan-*`), integration with existing FGR commands
+- **Critical Bug Fix**: Fixed `/garryreservereport` hanging issue caused by message length exceeding Discord's 2000 character limit
+- **Report Improvements**: Added current interest rate display, implemented timeouts (15s LLM, 30s total), shortened LLM prompts for concise responses
+- **Error Handling**: Enhanced webhook response validation, proper timeout management, fallback messages for service failures
+- **Key Lesson**: Discord message limits require careful content management - reports now stay under 1000 characters with truncation safeguards

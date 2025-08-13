@@ -17,6 +17,7 @@
     "test-fgr-announcement": "node src/fgr_cli.js announcement",
     "test-fgr-metrics": "node src/fgr_cli.js metrics",
     "test-fgr-llm": "node src/fgr_cli.js test-llm",
+    "test-fgr-rates": "node src/fgr_cli.js interest-rates",
     "test-fgr-all": "node src/fgr_cli.js test-all",
     "test-loan-credit": "node src/loan_cli.js credit-score",
     "test-loan-create": "node src/loan_cli.js create-loan",

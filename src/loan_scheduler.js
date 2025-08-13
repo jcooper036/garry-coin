@@ -16,13 +16,19 @@ class LoanScheduler {
     // Initialize base interest rate policy if it doesn't exist
     await this.initializeInterestRatePolicy();
 
-    // Start the scheduler - check every hour
+    // Set check interval based on environment
+    const environment = process.env.NODE_ENV || 'development';
+    const checkInterval = environment === 'development' ? 30 * 1000 : 60 * 60 * 1000; // 30 seconds in dev, 1 hour in prod
+    const intervalDescription = environment === 'development' ? '30 seconds' : '1 hour';
+
+    // Start the scheduler
     this.intervalId = setInterval(async () => {
       await this.processLoanPayments();
-    }, 60 * 60 * 1000); // 1 hour
+    }, checkInterval);
 
     structuredLog.loan('Loan payment scheduler started', {
-      checkInterval: '1 hour'
+      environment,
+      checkInterval: intervalDescription
     });
   }
 
@@ -136,26 +142,26 @@ class LoanScheduler {
       
       if (paymentResult.success) {
         if (paymentResult.status === 'paid') {
-          notificationMessage = `✅ **Loan Payment Successful**\\n\\n`;
-          notificationMessage += `Your loan #${loan.id} has been automatically paid in full.\\n`;
-          notificationMessage += `**Amount Paid:** ${paymentResult.paid_amount} GC\\n`;
+          notificationMessage = `✅ **Loan Payment Successful**\n\n`;
+          notificationMessage += `Your loan #${loan.id} has been automatically paid in full.\n`;
+          notificationMessage += `**Amount Paid:** ${paymentResult.paid_amount} GC\n`;
           
           if (paymentResult.went_into_debt) {
-            notificationMessage += `**Note:** Payment put your account into debt. This will affect your credit score.\\n`;
+            notificationMessage += `**Note:** Payment put your account into debt. This will affect your credit score.\n`;
           }
           
-          notificationMessage += `\\nThank you for using GarryCoin lending services!`;
+          notificationMessage += `\nThank you for using GarryCoin lending services!`;
         } else {
-          notificationMessage = `⚠️ **Loan Payment Incomplete**\\n\\n`;
-          notificationMessage += `Your loan #${loan.id} payment was processed but you didn't have sufficient funds.\\n`;
-          notificationMessage += `**Partial Payment:** ${paymentResult.paid_amount} GC\\n`;
-          notificationMessage += `**Amount Still Owed:** ${paymentResult.total_due - paymentResult.paid_amount} GC\\n`;
-          notificationMessage += `**Status:** Defaulted\\n\\n`;
+          notificationMessage = `⚠️ **Loan Payment Incomplete**\n\n`;
+          notificationMessage += `Your loan #${loan.id} payment was processed but you didn't have sufficient funds.\n`;
+          notificationMessage += `**Partial Payment:** ${paymentResult.paid_amount} GC\n`;
+          notificationMessage += `**Amount Still Owed:** ${paymentResult.total_due - paymentResult.paid_amount} GC\n`;
+          notificationMessage += `**Status:** Defaulted\n\n`;
           notificationMessage += `This default will negatively impact your credit score.`;
         }
       } else {
-        notificationMessage = `❌ **Loan Payment Failed**\\n\\n`;
-        notificationMessage += `There was an error processing payment for loan #${loan.id}.\\n`;
+        notificationMessage = `❌ **Loan Payment Failed**\n\n`;
+        notificationMessage += `There was an error processing payment for loan #${loan.id}.\n`;
         notificationMessage += `Please contact support if this issue persists.`;
       }
 
