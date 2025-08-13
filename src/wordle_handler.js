@@ -1,4 +1,4 @@
-const { checkWordleDay, processWordleTransaction } = require('./db');
+const { processWordleTransaction } = require('./db');
 const { structuredLog } = require('./logger');
 
 const REWARD_STRUCTURE = {
@@ -28,16 +28,6 @@ async function handleWordleMessage(message) {
     const mentionedUserIds = [...message.mentions.users.keys()];
     if (mentionedUserIds.length === 0) {
         structuredLog.wordle('No mentioned users found, skipping');
-        return;
-    }
-
-    const existingRecord = await checkWordleDay(today, mentionedUserIds);
-
-    if (existingRecord) {
-        structuredLog.wordle('Results already processed for today', {
-            date: today,
-            userId: existingRecord.user_id
-        });
         return;
     }
 
