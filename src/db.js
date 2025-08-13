@@ -998,33 +998,39 @@ async function payLoan(loanId) {
   }));
 }
 
-async function checkDailyLoanLimit(userId) {
+async function checkDailyLoanLimit(userId, lenderId) {
   return withRetry(async () => {
-    // First check if user has any outstanding loans
+    // Check if user has reached maximum of 10 active loans
     const outstandingLoans = await db('loans')
       .where({ borrower_user_id: userId, status: 'active' })
       .count('* as count')
       .first();
 
-    // If no outstanding loans, allow new loan regardless of daily limit
-    if (parseInt(outstandingLoans.count) === 0) {
-      return false;
+    if (parseInt(outstandingLoans.count) >= 10) {
+      return { blocked: true, reason: 'max_loans' };
     }
 
-    // If user has outstanding loans, check daily limit
+    // Check if user already has a loan from this lender today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const todayLoans = await db('loans')
-      .where({ borrower_user_id: userId })
+    const todayLoansFromLender = await db('loans')
+      .where({ 
+        borrower_user_id: userId,
+        lender_user_id: lenderId 
+      })
       .where('created_at', '>=', today)
       .where('created_at', '<', tomorrow)
       .count('* as count')
       .first();
 
-    return parseInt(todayLoans.count) >= 1;
+    if (parseInt(todayLoansFromLender.count) >= 1) {
+      return { blocked: true, reason: 'daily_limit_per_lender' };
+    }
+
+    return { blocked: false };
   });
 }
 
