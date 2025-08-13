@@ -330,36 +330,59 @@ async function getGamblingLeaderboard(type = 'profit') {
         LIMIT 10
       `);
     } else if (type === 'winrate') {
-      // Highest win rate (min 10 games)
+      // Highest win rate (min 10 games) - using proper game tables for RTB
       query = trx.raw(`
+        WITH heist_stats AS (
+          SELECT 
+            CASE 
+              WHEN t.sending_user_id IS NOT NULL THEN t.sending_user_id
+              ELSE t.receiving_user_id 
+            END as user_id,
+            COUNT(*) as games,
+            SUM(CASE WHEN t.transaction_type = 'heist_win' THEN 1 ELSE 0 END) as wins
+          FROM transactions t
+          WHERE t.transaction_type IN ('heist_win', 'heist_loss')
+          GROUP BY CASE 
+            WHEN t.sending_user_id IS NOT NULL THEN t.sending_user_id
+            ELSE t.receiving_user_id 
+          END
+        ),
+        rtb_stats AS (
+          SELECT 
+            bgp.user_id,
+            COUNT(*) as games,
+            SUM(CASE WHEN bgp.player_status = 'cashed_out' THEN 1 ELSE 0 END) as wins
+          FROM bus_games bg
+          JOIN bus_game_players bgp ON bg.id = bgp.game_id
+          WHERE bg.status = 'finished'
+          GROUP BY bgp.user_id
+        ),
+        wavelength_stats AS (
+          SELECT 
+            t.sending_user_id as user_id,
+            COUNT(*) as games,
+            COUNT(w.receiving_user_id) as wins
+          FROM transactions t
+          LEFT JOIN transactions w ON w.receiving_user_id = t.sending_user_id 
+            AND w.transaction_type = 'wavelength_win'
+            AND DATE(w.created_at) = DATE(t.created_at)
+          WHERE t.transaction_type = 'wavelength_wager'
+          GROUP BY t.sending_user_id
+        )
         SELECT 
           u.user_id,
-          COALESCE(wins.win_count, 0) as wins,
-          COALESCE(wagers.games_played, 0) as games_played,
+          COALESCE(h.wins, 0) + COALESCE(r.wins, 0) + COALESCE(w.wins, 0) as wins,
+          COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0) as games_played,
           CASE 
-            WHEN COALESCE(wagers.games_played, 0) > 0 
-            THEN ROUND(COALESCE(wins.win_count, 0) * 100.0 / wagers.games_played, 1)
+            WHEN COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0) > 0 
+            THEN ROUND((COALESCE(h.wins, 0) + COALESCE(r.wins, 0) + COALESCE(w.wins, 0)) * 100.0 / (COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0)), 1)
             ELSE 0 
           END as win_rate
         FROM users u
-        LEFT JOIN (
-          SELECT 
-            receiving_user_id as user_id,
-            COUNT(*) as win_count
-          FROM transactions 
-          WHERE transaction_type IN ('heist_win', 'rtb_win_end_of_line', 'wavelength_win')
-             OR transaction_type LIKE 'rtb_win_cash_out_%'
-          GROUP BY receiving_user_id
-        ) wins ON u.user_id = wins.user_id
-        LEFT JOIN (
-          SELECT 
-            sending_user_id as user_id,
-            COUNT(*) as games_played
-          FROM transactions 
-          WHERE transaction_type IN ('heist_loss', 'rtb_wager', 'wavelength_wager')
-          GROUP BY sending_user_id
-        ) wagers ON u.user_id = wagers.user_id
-        WHERE COALESCE(wagers.games_played, 0) >= 10
+        LEFT JOIN heist_stats h ON u.user_id = h.user_id
+        LEFT JOIN rtb_stats r ON u.user_id = r.user_id  
+        LEFT JOIN wavelength_stats w ON u.user_id = w.user_id
+        WHERE COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0) >= 10
         ORDER BY win_rate DESC
         LIMIT 10
       `);
