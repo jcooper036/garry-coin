@@ -86,7 +86,7 @@ function botLoanDecision(userId, amount) {
 - `lender` (optional): Target lender user (defaults to bot)
 
 **Behavior:**
-- Check loan request eligibility (daily limit OR no outstanding loans)
+- Check loan request eligibility (1 loan per lender per day, max 10 total active loans)
 - For bot loans: Apply approval algorithm with credit score evaluation
 - For user loans: Auto-approve if lender has sufficient funds
 - Create loan record with environment-dependent due date
@@ -94,9 +94,10 @@ function botLoanDecision(userId, amount) {
 - Transfer funds immediately upon approval
 
 **Rate Limiting:**
-- One loan request per user per day, OR if user has no outstanding loans
-- Users can request a new loan immediately after paying off all existing loans
-- Ephemeral message for rate-limited attempts: "You've already requested a loan today and have outstanding loans. Pay off your current loans or try again tomorrow."
+- One loan per lender per user per day (allows multiple loans from different lenders)
+- Maximum of 10 active loans per user total
+- Users can take 1 loan from GarryCoin Bot and 1 loan from each other user per day
+- Error messages distinguish between daily limit per lender vs. maximum total loans
 
 ### `/garrycreditreport`
 **Parameters:**
@@ -158,9 +159,9 @@ function botLoanDecision(userId, amount) {
 ## Security Considerations
 
 ### Anti-Abuse Measures:
-- Flexible loan request limit: daily limit OR no outstanding loans (encourages payoff)
+- Rate limiting: 1 loan per lender per user per day (prevents spam from single source)
 - Credit score-based risk assessment prevents unlimited borrowing
-- Maximum 10 active loans per user
+- Maximum 10 active loans per user total
 - Debt limit of -1000 GC prevents infinite negative balances
 - Comprehensive audit trail in transactions and loans tables
 

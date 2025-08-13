@@ -32,11 +32,18 @@ module.exports = {
         };
       }
 
-      // Check daily loan limit (or if user has outstanding loans)
-      const hasReachedDailyLimit = await checkDailyLoanLimit(userId);
-      if (hasReachedDailyLimit) {
+      // Check loan eligibility 
+      const loanLimit = await checkDailyLoanLimit(userId, lenderId);
+      if (loanLimit.blocked) {
+        let errorMessage;
+        if (loanLimit.reason === 'max_loans') {
+          errorMessage = "❌ You have reached the maximum of 10 active loans. Pay off some loans before requesting more.";
+        } else if (loanLimit.reason === 'daily_limit_per_lender') {
+          const lenderName = lenderId === 'garry_bot' ? 'GarryCoin Bot' : `<@${lenderId}>`;
+          errorMessage = `❌ You already have a loan from ${lenderName} today. Try again tomorrow or request from a different lender.`;
+        }
         return {
-          content: "❌ You've already requested a loan today and have outstanding loans. Pay off your current loans or try again tomorrow.",
+          content: errorMessage,
           ephemeral: true,
         };
       }
