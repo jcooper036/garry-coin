@@ -138,116 +138,124 @@ async function grant(receiverId, amount, transaction_type, trx) {
 
 async function getGamblingStats(userId) {
   return await db.transaction(async (trx) => {
-    // Define gambling transaction patterns
-    const wagerTypes = ['heist_loss', 'rtb_wager', 'wavelength_wager'];
-    const winTypes = ['heist_win', 'rtb_win_end_of_line', 'wavelength_win'];
-    const rtbWinPattern = 'rtb_win_cash_out_%';
-    const refundPattern = '%_refund_%';
+    // Get heist stats from transactions (no dedicated game table)
+    const heistTransactions = await trx('transactions')
+      .where(function() {
+        this.where('sending_user_id', userId).orWhere('receiving_user_id', userId);
+      })
+      .where('transaction_type', 'like', 'heist_%')
+      .orderBy('created_at', 'desc');
 
-    // Get all gambling-related transactions for the user
-    const allTransactions = await trx('transactions')
+    // Get RTB stats from game tables
+    const rtbGames = await trx('bus_games as bg')
+      .join('bus_game_players as bgp', 'bg.id', 'bgp.game_id')
+      .where('bgp.user_id', userId)
+      .where('bg.status', 'finished')
+      .select('bg.id', 'bg.wager', 'bgp.player_status');
+
+    // Get RTB win transactions to calculate winnings
+    const rtbWinTransactions = await trx('transactions')
+      .where('receiving_user_id', userId)
+      .where('transaction_type', 'like', 'rtb_win_%')
+      .whereNot('transaction_type', 'like', '%_refund_%');
+
+    // Get Wavelength stats from game tables  
+    const wavelengthGames = await trx('wavelength_games as wg')
+      .join('wavelength_players as wp', 'wg.id', 'wp.game_id')
+      .where('wp.user_id', userId)
+      .where('wg.status', 'finished')
+      .select('wg.id', 'wg.wager', 'wp.player_status');
+
+    // Get Wavelength win transactions to calculate winnings
+    const wavelengthWinTransactions = await trx('transactions')
+      .where('receiving_user_id', userId)
+      .where('transaction_type', 'wavelength_win')
+      .whereNot('transaction_type', 'like', '%_refund_%');
+
+    // Get all gambling transactions for overall stats and streaks
+    const allGamblingTransactions = await trx('transactions')
       .where(function() {
         this.where('sending_user_id', userId).orWhere('receiving_user_id', userId);
       })
       .where(function() {
-        this.whereIn('transaction_type', [...wagerTypes, ...winTypes])
-          .orWhere('transaction_type', 'like', rtbWinPattern)
-          .orWhere('transaction_type', 'like', refundPattern);
+        this.where('transaction_type', 'like', 'heist_%')
+          .orWhere('transaction_type', 'like', 'rtb_%')
+          .orWhere('transaction_type', 'like', 'wavelength_%');
       })
+      .whereNot('transaction_type', 'like', '%_refund_%')
       .orderBy('created_at', 'desc');
 
-    let totalWagered = 0;
-    let totalWon = 0;
-    let gamesPlayed = 0;
-    let wins = 0;
+    // Calculate heist stats
+    const heistStats = { wagered: 0, won: 0, games: 0, wins: 0 };
+    const heistWins = heistTransactions.filter(t => t.transaction_type === 'heist_win' && t.receiving_user_id === userId);
+    const heistLosses = heistTransactions.filter(t => t.transaction_type === 'heist_loss' && t.sending_user_id === userId);
     
-    // Per-game stats
-    const gameStats = {
-      heist: { wagered: 0, won: 0, games: 0, wins: 0 },
-      rtb: { wagered: 0, won: 0, games: 0, wins: 0 },
-      wavelength: { wagered: 0, won: 0, games: 0, wins: 0 }
-    };
+    heistStats.games = heistWins.length + heistLosses.length;
+    heistStats.wins = heistWins.length;
+    heistStats.wagered = heistLosses.reduce((sum, t) => sum + t.amount, 0);
+    heistStats.won = heistWins.reduce((sum, t) => sum + t.amount, 0);
 
+    // Calculate RTB stats
+    const rtbStats = { wagered: 0, won: 0, games: 0, wins: 0 };
+    rtbStats.games = rtbGames.length;
+    rtbStats.wins = rtbGames.filter(g => g.player_status === 'cashed_out').length;
+    rtbStats.wagered = rtbGames.reduce((sum, g) => sum + g.wager, 0);
+    rtbStats.won = rtbWinTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    // Calculate Wavelength stats (fall back to transaction-based counting since game table doesn't track winners properly)
+    const wavelengthWagerTransactions = await trx('transactions')
+      .where('sending_user_id', userId)
+      .where('transaction_type', 'wavelength_wager')
+      .whereNot('transaction_type', 'like', '%_refund_%');
+    
+    const wavelengthStats = { wagered: 0, won: 0, games: 0, wins: 0 };
+    wavelengthStats.games = wavelengthWagerTransactions.length;
+    wavelengthStats.wins = wavelengthWinTransactions.length;
+    wavelengthStats.wagered = wavelengthWagerTransactions.reduce((sum, t) => sum + t.amount, 0);
+    wavelengthStats.won = wavelengthWinTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    // Calculate overall stats
+    const totalWagered = heistStats.wagered + rtbStats.wagered + wavelengthStats.wagered;
+    const totalWon = heistStats.won + rtbStats.won + wavelengthStats.won;
+    const gamesPlayed = heistStats.games + rtbStats.games + wavelengthStats.games;
+    const totalWins = heistStats.wins + rtbStats.wins + wavelengthStats.wins;
+
+    // Calculate biggest win/loss and streaks from transaction history
     let biggestWin = 0;
     let biggestLoss = 0;
     let currentStreak = 0;
-    let currentStreakType = null; // 'win' or 'loss'
+    let currentStreakType = null;
 
-    for (const tx of allTransactions) {
+    for (const tx of allGamblingTransactions) {
       const isUserSending = tx.sending_user_id === userId;
       const isUserReceiving = tx.receiving_user_id === userId;
       const amount = tx.amount;
-      
-      // Skip refunds (they're net neutral)
-      if (tx.transaction_type.includes('refund')) continue;
 
-      let gameType = null;
-      let isWager = false;
-      let isWin = false;
-
-      // Determine game type and transaction nature
-      if (tx.transaction_type.startsWith('heist_')) {
-        gameType = 'heist';
-        if (tx.transaction_type === 'heist_loss' && isUserSending) {
-          isWager = true;
-        } else if (tx.transaction_type === 'heist_win' && isUserReceiving) {
-          isWin = true;
-        }
-      } else if (tx.transaction_type.startsWith('rtb_')) {
-        gameType = 'rtb';
-        if (tx.transaction_type === 'rtb_wager' && isUserSending) {
-          isWager = true;
-        } else if (tx.transaction_type.startsWith('rtb_win_') && isUserReceiving) {
-          isWin = true;
-        }
-      } else if (tx.transaction_type.startsWith('wavelength_')) {
-        gameType = 'wavelength';
-        if (tx.transaction_type === 'wavelength_wager' && isUserSending) {
-          isWager = true;
-        } else if (tx.transaction_type === 'wavelength_win' && isUserReceiving) {
-          isWin = true;
-        }
-      }
-
-      if (gameType && (isWager || isWin)) {
-        if (isWager) {
-          totalWagered += amount;
-          gameStats[gameType].wagered += amount;
-          gameStats[gameType].games++;
-          gamesPlayed++;
-          
-          if (amount > biggestLoss) biggestLoss = amount;
-          
-          // Update streak
-          if (currentStreakType === 'loss') {
-            currentStreak++;
-          } else {
-            currentStreak = 1;
-            currentStreakType = 'loss';
-          }
-        }
+      if (isUserSending && (tx.transaction_type.includes('loss') || tx.transaction_type.includes('wager'))) {
+        // This is a loss/wager
+        if (amount > biggestLoss) biggestLoss = amount;
         
-        if (isWin) {
-          totalWon += amount;
-          gameStats[gameType].won += amount;
-          gameStats[gameType].wins++;
-          wins++;
-          
-          if (amount > biggestWin) biggestWin = amount;
-          
-          // Update streak
-          if (currentStreakType === 'win') {
-            currentStreak++;
-          } else {
-            currentStreak = 1;
-            currentStreakType = 'win';
-          }
+        if (currentStreakType === 'loss') {
+          currentStreak++;
+        } else {
+          currentStreak = 1;
+          currentStreakType = 'loss';
+        }
+      } else if (isUserReceiving && tx.transaction_type.includes('win')) {
+        // This is a win
+        if (amount > biggestWin) biggestWin = amount;
+        
+        if (currentStreakType === 'win') {
+          currentStreak++;
+        } else {
+          currentStreak = 1;
+          currentStreakType = 'win';
         }
       }
     }
 
     const netProfit = totalWon - totalWagered;
-    const winRate = gamesPlayed > 0 ? (wins / gamesPlayed * 100) : 0;
+    const winRate = gamesPlayed > 0 ? (totalWins / gamesPlayed * 100) : 0;
     const avgWager = gamesPlayed > 0 ? (totalWagered / gamesPlayed) : 0;
 
     return {
@@ -256,7 +264,7 @@ async function getGamblingStats(userId) {
         totalWon,
         netProfit,
         gamesPlayed,
-        wins,
+        wins: totalWins,
         winRate,
         avgWager,
         biggestWin,
@@ -264,8 +272,12 @@ async function getGamblingStats(userId) {
         currentStreak,
         currentStreakType
       },
-      byGame: gameStats,
-      recentTransactions: allTransactions.slice(0, 10)
+      byGame: {
+        heist: heistStats,
+        rtb: rtbStats,
+        wavelength: wavelengthStats
+      },
+      recentTransactions: allGamblingTransactions.slice(0, 10)
     };
   });
 }
