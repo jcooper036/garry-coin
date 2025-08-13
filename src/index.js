@@ -3,7 +3,7 @@ const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers, createWavelengthGame, getActiveWavelengthGame, addPlayerToWavelengthGame, getWavelengthPlayers, getWavelengthGame, updateWavelengthPlayer, getGamblingStats, getGamblingLeaderboard } = require('./db');
+const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers, createWavelengthGame, getActiveWavelengthGame, addPlayerToWavelengthGame, getWavelengthPlayers, getWavelengthGame, updateWavelengthPlayer, getGamblingStats, getGamblingLeaderboard, getEconomicMetrics, getFGREvents } = require('./db');
 const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const { endWavelengthGame, startWavelengthTimer } = require('./commands/games/wavelength/wavelength_helpers');
 const { structuredLog } = require('./logger');
@@ -183,6 +183,131 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: `You have made it rain on ${successCount} members of the server!` }),
         });
+        return;
+      }
+
+      // Special post-processing for Federal GarryCoin Reserve Report
+      if (response.postProcess === 'garry_reserve_report') {
+        // Acknowledge the interaction to prevent timeout
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        try {
+          structuredLog.info('Starting FGR report generation', { userId: response.userId });
+          
+          const context = new (require('./fgr_context')).FGRContext();
+          structuredLog.info('FGRContext created successfully');
+          
+          // Get current economic data and context
+          structuredLog.info('Fetching economic metrics');
+          const metrics = await getEconomicMetrics();
+          structuredLog.info('Economic metrics fetched', { metricsKeys: Object.keys(metrics) });
+          
+          structuredLog.info('Fetching recent FGR events');
+          const recentEvents = await getFGREvents(3);
+          structuredLog.info('Recent events fetched', { eventCount: recentEvents.length });
+          
+          structuredLog.info('Getting market context');
+          const marketContext = await context.getMarketContext();
+          structuredLog.info('Market context received', { contextKeys: Object.keys(marketContext) });
+
+          // Build base report with real data
+          structuredLog.info('Building base report');
+          const baseReport = `**Federal GarryCoin Reserve - Economic Analysis Report**
+**Reporting Period:** ${new Date().toLocaleDateString()}
+
+**Market Overview:**
+• Total GarryCoin Supply: ${metrics.economicMetrics.totalSupply.toLocaleString()} GC
+• Active Market Participants: ${metrics.userMetrics.activeUsers}/${metrics.userMetrics.totalUsers} (${metrics.userMetrics.activityRate.toFixed(1)}% participation rate)
+• 24hr Transaction Volume: ${metrics.economicMetrics.recentTransactionVolume} transactions
+• Weekly Gambling Volume: ${metrics.economicMetrics.weeklyGamblingVolume.toLocaleString()} GC
+
+**Sectoral Performance:**
+• Heist Market: ${metrics.gameMetrics.heist.games} transactions, ${metrics.gameMetrics.heist.winRate.toFixed(1)}% success rate
+• RTB Securities: ${metrics.gameMetrics.rtb.games} games, avg wager ${metrics.gameMetrics.rtb.avgWager.toFixed(1)} GC
+• Wavelength Derivatives: ${metrics.gameMetrics.wavelength.games} positions, avg exposure ${metrics.gameMetrics.wavelength.avgWager.toFixed(1)} GC
+
+**Recent FGR Actions:**`;
+
+          // Add recent events
+          structuredLog.info('Processing recent events');
+          let eventsText = '';
+          if (recentEvents.length > 0) {
+            eventsText = recentEvents.map(event => 
+              `• ${event.event_type.toUpperCase()}: ${event.description.substring(0, 100)}...`
+            ).join('\n');
+          } else {
+            eventsText = '• No recent interventions recorded';
+          }
+
+          // Generate contextual economic analysis using LLM
+          structuredLog.info('Preparing LLM prompt');
+          const contextualPrompt = `You are the Federal GarryCoin Reserve Chairman writing the economic outlook section of your quarterly report.
+
+${context.formatContextForLLM(marketContext)}
+
+Write a 3-4 sentence economic analysis and outlook using serious Federal Reserve terminology and financial jargon, but with completely nonsensical economic reasoning. Reference specific data points from the current market conditions above. Sound authoritative and professional, but make the economic logic completely absurd. Do not include disclaimers.`;
+
+          const { llmService } = require('./llm_service');
+          let economicAnalysis;
+          try {
+            structuredLog.info('Calling LLM service');
+            economicAnalysis = await llmService.generateText(contextualPrompt);
+            structuredLog.info('Economic analysis generated via LLM for reserve report');
+          } catch (error) {
+            structuredLog.error('Failed to generate economic analysis via LLM', error, {
+              action: 'reserve_report_generation',
+              userId: response.userId,
+              fallbackUsed: true
+            });
+            economicAnalysis = "The GarryCoin Federal Reserve has no comments at this time.";
+          }
+
+          structuredLog.info('Building full report');
+          const fullReport = `${baseReport}
+${eventsText}
+
+**Economic Outlook:**
+${economicAnalysis}
+
+**Forward Guidance:**
+The FOMC remains data-dependent and will continue monitoring emoji velocity, meme-coin correlations, and cross-sectional gambling beta exposures for signs of monetary transmission mechanism disruption.
+
+*This report contains forward-looking statements subject to GarryCoin market volatility and regulatory capture by Discord moderators.*`;
+
+          // Send the final report
+          structuredLog.info('Sending final report to Discord');
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: fullReport }),
+          });
+
+          structuredLog.info('FGR economic report sent successfully', { userId: response.userId });
+
+        } catch (error) {
+          structuredLog.error('Failed to generate FGR economic report', { 
+            error: error.message, 
+            stack: error.stack,
+            userId: response.userId 
+          });
+          
+          // Send error message
+          try {
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                content: 'The Federal Reserve\'s economic modeling systems are experiencing a temporary outage. Please consult your financial advisor or try again later.',
+                flags: InteractionResponseFlags.EPHEMERAL 
+              }),
+            });
+          } catch (fetchError) {
+            structuredLog.error('Failed to send error message to Discord', { 
+              error: fetchError.message, 
+              userId: response.userId 
+            });
+          }
+        }
         return;
       }
 

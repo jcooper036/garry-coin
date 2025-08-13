@@ -1,36 +1,20 @@
-const { SlashCommandBuilder } = require('discord.js');
 const { castFGRVote, getFGRVotes, recordFGREvent } = require('../db');
+const { structuredLog } = require('../logger');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('garryreservevote')
-    .setDescription('Vote on Federal GarryCoin Reserve monetary policy')
-    .addStringOption(option =>
-      option.setName('policy')
-        .setDescription('Policy to vote on')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Hawkish Rate Stance - Tighten monetary policy', value: 'hawkish' },
-          { name: 'Dovish Stimulus - Expand monetary policy', value: 'dovish' },
-          { name: 'Quantitative Tightening - Reduce market liquidity', value: 'qt' },
-          { name: 'Emergency Accommodation - Crisis response measures', value: 'emergency' }
-        ))
-    .addStringOption(option =>
-      option.setName('vote')
-        .setDescription('Your vote')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Support', value: 'yes' },
-          { name: 'Oppose', value: 'no' },
-          { name: 'Abstain', value: 'abstain' }
-        )),
+  name: 'garryreservevote',
+  description: 'Vote on Federal GarryCoin Reserve monetary policy',
+  ephemeral: false,
 
   async execute(interaction) {
-    const userId = interaction.user.id;
-    const policy = interaction.options.getString('policy');
-    const vote = interaction.options.getString('vote');
+    const userId = interaction.member.user.id;
+    const options = interaction.data.options;
+    const policy = options.find(opt => opt.name === 'policy').value;
+    const vote = options.find(opt => opt.name === 'vote').value;
 
     try {
+      structuredLog.info('Casting FGR vote', { userId, policy, vote });
+
       // Cast the vote (upsert)
       await castFGRVote(userId, policy, vote);
 
@@ -68,17 +52,20 @@ Abstain: ${tallies.abstain || 0}
 
 *The Board of Governors will consider this input in their next monetary policy decision. Market participants should expect elevated volatility in GarryCoin derivative instruments.*`;
 
-      await interaction.reply({
+      structuredLog.info('FGR vote completed successfully', { userId, policy, vote });
+      
+      return {
         content: response,
-        ephemeral: false
-      });
+        ephemeral: true
+      };
 
     } catch (error) {
-      console.error('Error in garryreservevote:', error);
-      await interaction.reply({
+      structuredLog.error('Error in garryreservevote command', error, { userId, policy, vote });
+      
+      return {
         content: 'The Federal Reserve\'s voting systems are experiencing technical difficulties. Please try again later.',
         ephemeral: true
-      });
+      };
     }
   }
 };

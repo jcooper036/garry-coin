@@ -69,9 +69,15 @@ I should not suggest running migrations myself, i.e. `npx knex migrate:latest`
 ### What to do instead
 Let the user an/or other systems handle this. In development, the migrations are run when the user runs `docker compose up --build` to start the test bot, server, and database. In prod, this is handled by CI/CD. I should suggest to the user that they are all good to start / restart docker compose to run the migrations.
 
+## Missing environment variables in troubleshooting
+### What I did wrong
+When troubleshooting issues where services fail silently or get stuck, I didn't check for missing environment variables that services depend on.
+### What to do instead
+When troubleshooting mysterious failures, timeouts, or hanging processes, always check that required environment variables are properly configured in docker-compose.yml, .env files, and production deployment settings. Missing API keys, tokens, or connection strings often cause services to fail silently or hang indefinitely.
+
 # Memory
 
-## 2025-08-13 Session Summary (Federal GarryCoin Reserve Implementation)
+## 2025-08-13 Session Summary (Federal GarryCoin Reserve Implementation & Debugging)
 
 Implemented comprehensive Federal GarryCoin Reserve (FGR) system with AI-driven economic interventions:
 - **Technology Stack**: Gemini API integration for contextual financial content generation, structured logging system
@@ -83,6 +89,8 @@ Implemented comprehensive Federal GarryCoin Reserve (FGR) system with AI-driven 
 - **Testing Infrastructure**: Complete CLI testing suite with npm scripts, detailed diagnostics for API connectivity
 - **Architecture**: Modular design with `FGRContext` for data aggregation, event-driven system with configurable probabilities
 - **Documentation**: Comprehensive `Economic_Policy.md` explaining all policy tools, triggers, and expected frequencies
+- **Critical Debugging**: Fixed `/garryreservereport` timeout issue by identifying missing GEMINI_API_KEY in docker-compose.yml, added comprehensive logging for post-processing flows
+- **Troubleshooting Lesson**: Environment variable validation crucial for silent service failures - added to corrections section
 
 ## 2025-06-30 Session Summary (Initial Setup & Database Integration)
 
