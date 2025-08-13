@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { getEconomicMetrics, getFGREvents } = require('../db');
 const { llmService } = require('../llm_service');
+const { FGRContext } = require('../fgr_context');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,9 +13,12 @@ module.exports = {
     await interaction.deferReply({ ephemeral: false });
 
     try {
-      // Get current economic data
+      const context = new FGRContext();
+      
+      // Get current economic data and context
       const metrics = await getEconomicMetrics();
       const recentEvents = await getFGREvents(3);
+      const marketContext = await context.getMarketContext();
 
       // Build base report with real data
       const baseReport = `**Federal GarryCoin Reserve - Economic Analysis Report**
@@ -43,34 +47,24 @@ module.exports = {
         eventsText = '• No recent interventions recorded';
       }
 
-      // Prepare data for LLM context
-      const dataContext = {
-        totalSupply: metrics.economicMetrics.totalSupply,
-        activeUsers: metrics.userMetrics.activeUsers,
-        activityRate: metrics.userMetrics.activityRate,
-        gamblingVolume: metrics.economicMetrics.weeklyGamblingVolume,
-        heistWinRate: metrics.gameMetrics.heist.winRate,
-        rtbGames: metrics.gameMetrics.rtb.games,
-        wavelengthGames: metrics.gameMetrics.wavelength.games
-      };
+      // Generate contextual economic analysis using LLM
+      const contextualPrompt = `You are the Federal GarryCoin Reserve Chairman writing the economic outlook section of your quarterly report.
 
-      // Generate economic analysis using LLM
-      const analysisPrompt = `You are the Federal GarryCoin Reserve Chairman. Write a 3-4 sentence economic analysis/outlook using serious financial terminology but with completely nonsensical reasoning. Use this data: ${metrics.userMetrics.activityRate.toFixed(1)}% user activity rate, ${metrics.gameMetrics.heist.winRate.toFixed(1)}% heist success rate, ${metrics.economicMetrics.weeklyGamblingVolume} GC weekly gambling volume, ${metrics.userMetrics.activeUsers} active users. Sound authoritative but absurd. No disclaimers.`;
+${context.formatContextForLLM(marketContext)}
 
-      const fallbackAnalyses = [
-        `Based on cross-sectional volatility analysis, the ${metrics.userMetrics.activityRate.toFixed(1)}% participation rate indicates elevated systematic risk premiums in the meme-coin derivatives market. The ${metrics.gameMetrics.heist.winRate.toFixed(1)}% heist success rate suggests underlying liquidity stress, requiring immediate quantitative easing measures. Market microstructure analysis reveals significant alpha decay in the wavelength futures complex.`,
-        
-        `Current market conditions exhibit classic signs of beta-adjusted momentum reversal, with the ${metrics.economicMetrics.weeklyGamblingVolume} GC gambling volume indicating excessive leverage in retail gambling portfolios. The Federal Reserve maintains its accommodative stance while monitoring cross-currency emoji transfer flows for signs of systematic risk spillover effects.`,
-        
-        `Technical indicators suggest we're approaching a critical inflection point in the GarryCoin yield curve, with ${metrics.userMetrics.activeUsers} active participants creating dangerous concentrations of risk-parity exposure. The Board recommends immediate implementation of counter-cyclical capital buffers to prevent cascading failures in the heist-to-RTB arbitrage complex.`
-      ];
+Write a 3-4 sentence economic analysis and outlook using serious Federal Reserve terminology and financial jargon, but with completely nonsensical economic reasoning. Reference specific data points from the current market conditions above. Sound authoritative and professional, but make the economic logic completely absurd. Do not include disclaimers.`;
 
       let economicAnalysis;
       try {
-        economicAnalysis = await llmService.generateWithFallbacks(analysisPrompt, fallbackAnalyses);
+        economicAnalysis = await llmService.generateText(contextualPrompt);
+        structuredLog.info('Economic analysis generated via LLM for reserve report');
       } catch (error) {
-        console.error('LLM generation failed, using fallback:', error);
-        economicAnalysis = fallbackAnalyses[Math.floor(Math.random() * fallbackAnalyses.length)];
+        structuredLog.error('Failed to generate economic analysis via LLM', error, {
+          action: 'reserve_report_generation',
+          userId: interaction.user.id,
+          fallbackUsed: true
+        });
+        economicAnalysis = "The GarryCoin Federal Reserve has no comments at this time.";
       }
 
       const fullReport = `${baseReport}

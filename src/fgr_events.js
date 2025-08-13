@@ -8,6 +8,7 @@ const {
   db
 } = require('./db');
 const { llmService } = require('./llm_service');
+const { FGRContext } = require('./fgr_context');
 const { structuredLog } = require('./logger');
 
 /**
@@ -17,6 +18,7 @@ const { structuredLog } = require('./logger');
 class FGREvents {
   constructor(discordClient) {
     this.client = discordClient;
+    this.context = new FGRContext();
     this.lastQECheck = Date.now();
     this.lastBuybackCheck = Date.now();
     this.lastAnnouncementCheck = Date.now();
@@ -117,22 +119,25 @@ class FGREvents {
       const variance = Math.floor(Math.random() * 25) - 12; // ±12
       const qeAmount = Math.max(10, baseAmount + variance);
 
-      // Generate LLM explanation
-      const qePrompt = `You are the Federal GarryCoin Reserve Chairman announcing emergency quantitative easing. Explain why you're giving ${qeAmount} GarryCoins each to ${targets.length} users with negative gambling returns. Mention that weekly gambling volume is ${metrics.economicMetrics.weeklyGamblingVolume} GC and user activity is ${metrics.userMetrics.activityRate.toFixed(1)}%. Use serious financial jargon but nonsensical reasoning. 2-3 sentences max.`;
-
-      const fallbackExplanations = [
-        `The FOMC has authorized emergency QE-${Math.floor(Math.random() * 10) + 1} targeting systematic underperformance in the degenerate gambling sector. Cross-sectional analysis indicates ${targets.length} market participants require immediate liquidity injection to prevent cascading failures in the emoji-transfer arbitrage complex.`,
-        
-        `Due to elevated VIX levels in the RTB derivatives market, the Federal Reserve is implementing targeted asset purchases to support price discovery mechanisms. The ${qeAmount} GC stimulus will help restore proper risk-parity allocation across underperforming gambling portfolios.`,
-        
-        `Market microstructure analysis reveals dangerous concentrations of negative alpha in retail heist positions. The Board has approved direct monetary accommodation to prevent systemic deleveraging events that could destabilize the broader GarryCoin ecosystem.`
-      ];
-
       let announcement;
       try {
-        announcement = await llmService.generateWithFallbacks(qePrompt, fallbackExplanations);
+        const contextualPrompt = await this.context.generateContextualPrompt('qe', {
+          amount: qeAmount,
+          recipients: targets.length
+        });
+        announcement = await llmService.generateText(contextualPrompt);
+        structuredLog.info('QE announcement generated via LLM', { 
+          recipientCount: targets.length, 
+          amount: qeAmount 
+        });
       } catch (error) {
-        announcement = fallbackExplanations[Math.floor(Math.random() * fallbackExplanations.length)];
+        structuredLog.error('Failed to generate QE announcement via LLM', error, {
+          action: 'quantitative_easing',
+          recipientCount: targets.length,
+          amount: qeAmount,
+          fallbackUsed: true
+        });
+        announcement = "The GarryCoin Federal Reserve has no comments at this time.";
       }
 
       // Execute the grants
@@ -237,22 +242,25 @@ ${announcement}
         return;
       }
 
-      // Generate LLM explanation
-      const buybackPrompt = `You are the Federal GarryCoin Reserve Chairman announcing a strategic share buyback program. Explain why you're purchasing ${totalBought} GarryCoins from ${buybackData.length} profitable players at a premium. Use corporate jargon about "optimizing balance sheet exposure" and "high-beta gambling portfolios". Sound like a Fortune 500 earnings call. 2-3 sentences.`;
-
-      const fallbackExplanations = [
-        `The Board has authorized a ${totalBought} GC strategic repurchase program to optimize our balance sheet exposure to high-beta gambling portfolios. This accretive transaction enhances shareholder value while reducing systematic risk concentrations in our active trading operations.`,
-        
-        `Following comprehensive portfolio analysis, management has approved targeted share buybacks from ${buybackData.length} counterparties to improve our risk-adjusted return profile. The premium pricing reflects current market dislocations and our commitment to maintaining adequate liquidity buffers.`,
-        
-        `The Federal Reserve's Asset-Liability Committee has recommended immediate share repurchases to enhance capital efficiency ratios. These transactions will reduce our exposure to concentrated gambling alpha while supporting overall market stability through counter-cyclical operations.`
-      ];
-
       let announcement;
       try {
-        announcement = await llmService.generateWithFallbacks(buybackPrompt, fallbackExplanations);
+        const contextualPrompt = await this.context.generateContextualPrompt('buyback', {
+          totalAmount: totalBought,
+          participants: buybackData.length
+        });
+        announcement = await llmService.generateText(contextualPrompt);
+        structuredLog.info('Buyback announcement generated via LLM', { 
+          participantCount: buybackData.length, 
+          totalAmount: totalBought 
+        });
       } catch (error) {
-        announcement = fallbackExplanations[Math.floor(Math.random() * fallbackExplanations.length)];
+        structuredLog.error('Failed to generate buyback announcement via LLM', error, {
+          action: 'strategic_buyback',
+          participantCount: buybackData.length,
+          totalAmount: totalBought,
+          fallbackUsed: true
+        });
+        announcement = "The GarryCoin Federal Reserve has no comments at this time.";
       }
 
       // Execute the buybacks
@@ -312,8 +320,6 @@ ${buybackDetails}
    */
   async makePolicyAnnouncement() {
     try {
-      const metrics = await getEconomicMetrics();
-      
       // Random economic "topics" to discuss
       const topics = [
         'yield curve inversions in the meme-coin sector',
@@ -328,21 +334,22 @@ ${buybackDetails}
 
       const randomTopic = topics[Math.floor(Math.random() * topics.length)];
 
-      const announcementPrompt = `You are the Federal GarryCoin Reserve Chairman making a policy announcement about ${randomTopic}. Reference that there are ${metrics.userMetrics.activeUsers} active users and ${metrics.gameMetrics.heist.winRate.toFixed(1)}% heist success rate. Announce some vague policy stance but don't commit to any specific actions. Use Federal Reserve language. 2-3 sentences.`;
-
-      const fallbackAnnouncements = [
-        `The FOMC continues to monitor cross-sectional developments in ${randomTopic} while maintaining its current accommodative stance. Recent data indicating ${metrics.userMetrics.activeUsers} active market participants suggests underlying resilience in the GarryCoin ecosystem, though risks remain tilted to the downside.`,
-        
-        `Based on comprehensive analysis of ${randomTopic}, the Federal Reserve remains committed to its dual mandate of price stability and maximum GarryCoin employment. The ${metrics.gameMetrics.heist.winRate.toFixed(1)}% heist success rate warrants continued monitoring for signs of systematic risk concentration.`,
-        
-        `The Board of Governors has assessed current conditions regarding ${randomTopic} and determined that the monetary policy stance remains appropriate at this time. We will continue to use our full range of tools to support market functioning and maintain orderly conditions in GarryCoin markets.`
-      ];
-
       let announcement;
       try {
-        announcement = await llmService.generateWithFallbacks(announcementPrompt, fallbackAnnouncements);
+        const contextualPrompt = await this.context.generateContextualPrompt('announcement', {
+          topic: randomTopic
+        });
+        announcement = await llmService.generateText(contextualPrompt);
+        structuredLog.info('Policy announcement generated via LLM', { 
+          topic: randomTopic 
+        });
       } catch (error) {
-        announcement = fallbackAnnouncements[Math.floor(Math.random() * fallbackAnnouncements.length)];
+        structuredLog.error('Failed to generate policy announcement via LLM', error, {
+          action: 'policy_announcement',
+          topic: randomTopic,
+          fallbackUsed: true
+        });
+        announcement = "The GarryCoin Federal Reserve has no comments at this time.";
       }
 
       // Record the event

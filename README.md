@@ -30,7 +30,16 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 
 # Roadmap
 
-## 2.beta.0.0 - 2025-07-27
+## 3.0.beta - 2025-08-13
+### Completed
+#### Features
+- leader boards for gambling games
+- Federal GarryCoin Resvere (FGR)
+#### Bug fixes
+- harded database pooling timeouts
+- widespread defered messaging to avoid discord timeouts
+
+## 2.0.0 - 2025-08-01
 ### Completed
 #### Features
 - wordle rewards
