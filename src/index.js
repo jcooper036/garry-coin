@@ -191,6 +191,22 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         // Acknowledge the interaction to prevent timeout
         res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
+        // Set a timeout for the entire process to prevent hanging
+        const processTimeout = setTimeout(async () => {
+          try {
+            structuredLog.error('FGR report generation timed out after 30 seconds');
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                content: '❌ Federal Reserve report generation timed out. The economic modeling systems are currently under stress. Please try again later.' 
+              }),
+            });
+          } catch (error) {
+            structuredLog.error('Failed to send timeout message', { error: error.message });
+          }
+        }, 30000);
+
         try {
           structuredLog.info('Starting FGR report generation', { userId: response.userId });
           
@@ -201,6 +217,17 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           structuredLog.info('Fetching economic metrics');
           const metrics = await getEconomicMetrics();
           structuredLog.info('Economic metrics fetched', { metricsKeys: Object.keys(metrics) });
+          
+          // Get current interest rate
+          structuredLog.info('Fetching current interest rate');
+          let currentInterestRate = 5.0;
+          try {
+            const policy = await getFGRPolicy('base_interest_rate');
+            currentInterestRate = policy ? parseFloat(policy.policy_data.rate || 5.0) : 5.0;
+            structuredLog.info('Current interest rate fetched', { rate: currentInterestRate });
+          } catch (error) {
+            structuredLog.warn('Failed to fetch interest rate, using default', { defaultRate: currentInterestRate });
+          }
           
           structuredLog.info('Fetching recent FGR events');
           const recentEvents = await getFGREvents(3);
@@ -214,6 +241,9 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           structuredLog.info('Building base report');
           const baseReport = `**Federal GarryCoin Reserve - Economic Analysis Report**
 **Reporting Period:** ${new Date().toLocaleDateString()}
+
+**Monetary Policy:**
+• Current Base Interest Rate: ${currentInterestRate.toFixed(2)}%
 
 **Market Overview:**
 • Total GarryCoin Supply: ${metrics.economicMetrics.totalSupply.toLocaleString()} GC
@@ -233,25 +263,36 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           let eventsText = '';
           if (recentEvents.length > 0) {
             eventsText = recentEvents.map(event => 
-              `• ${event.event_type.toUpperCase()}: ${event.description.substring(0, 100)}...`
+              `• ${event.event_type.toUpperCase()}: ${event.description.substring(0, 60)}...`
             ).join('\n');
           } else {
             eventsText = '• No recent interventions recorded';
           }
 
-          // Generate contextual economic analysis using LLM
+          // Generate contextual economic analysis using LLM with timeout
           structuredLog.info('Preparing LLM prompt');
-          const contextualPrompt = `You are the Federal GarryCoin Reserve Chairman writing the economic outlook section of your quarterly report.
+          const contextualPrompt = `You are the Federal GarryCoin Reserve Chairman writing a brief economic outlook statement.
 
 ${context.formatContextForLLM(marketContext)}
 
-Write a 3-4 sentence economic analysis and outlook using serious Federal Reserve terminology and financial jargon, but with completely nonsensical economic reasoning. Reference specific data points from the current market conditions above. Sound authoritative and professional, but make the economic logic completely absurd. Do not include disclaimers.`;
+Current base interest rate: ${currentInterestRate.toFixed(2)}%
+
+Write a concise 2-3 sentence economic analysis using Federal Reserve terminology and financial jargon, but with nonsensical economic reasoning. Keep it under 200 characters. Reference specific data points. Sound authoritative but make the logic absurd. No disclaimers.`;
 
           const { llmService } = require('./llm_service');
           let economicAnalysis;
+          
+          // Add timeout to LLM call to prevent hanging
+          const llmTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('LLM timeout')), 15000)
+          );
+          
           try {
-            structuredLog.info('Calling LLM service');
-            economicAnalysis = await llmService.generateText(contextualPrompt);
+            structuredLog.info('Calling LLM service with timeout');
+            economicAnalysis = await Promise.race([
+              llmService.generateText(contextualPrompt),
+              llmTimeout
+            ]);
             structuredLog.info('Economic analysis generated via LLM for reserve report');
           } catch (error) {
             structuredLog.error('Failed to generate economic analysis via LLM', error, {
@@ -270,21 +311,48 @@ ${eventsText}
 ${economicAnalysis}
 
 **Forward Guidance:**
-The FOMC remains data-dependent and will continue monitoring emoji velocity, meme-coin correlations, and cross-sectional gambling beta exposures for signs of monetary transmission mechanism disruption.
+The FOMC remains data-dependent and will monitor emoji velocity and cross-sectional gambling beta exposures.
 
 *This report contains forward-looking statements subject to GarryCoin market volatility and regulatory capture by Discord moderators.*`;
 
-          // Send the final report
-          structuredLog.info('Sending final report to Discord');
-          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: fullReport }),
+          // Check if message is too long for Discord (2000 char limit)
+          const finalReport = fullReport.length > 2000 
+            ? fullReport.substring(0, 1950) + '...\n\n*[Report truncated due to length]*'
+            : fullReport;
+
+          structuredLog.info('Final report prepared', { 
+            originalLength: fullReport.length, 
+            finalLength: finalReport.length,
+            truncated: fullReport.length > 2000 
           });
 
+          // Send the final report
+          structuredLog.info('Sending final report to Discord');
+          const webhookResponse = await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: finalReport }),
+          });
+
+          if (!webhookResponse.ok) {
+            const errorText = await webhookResponse.text();
+            structuredLog.error('Discord webhook failed', { 
+              status: webhookResponse.status,
+              statusText: webhookResponse.statusText,
+              errorText: errorText,
+              userId: response.userId 
+            });
+            throw new Error(`Discord webhook failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
+          }
+
           structuredLog.info('FGR economic report sent successfully', { userId: response.userId });
+          
+          // Clear the timeout since we completed successfully
+          clearTimeout(processTimeout);
 
         } catch (error) {
+          // Clear timeout on error as well
+          clearTimeout(processTimeout);
           structuredLog.error('Failed to generate FGR economic report', { 
             error: error.message, 
             stack: error.stack,
@@ -307,6 +375,255 @@ The FOMC remains data-dependent and will continue monitoring emoji velocity, mem
               userId: response.userId 
             });
           }
+        }
+        return;
+      }
+
+      // Special post-processing for loan requests
+      if (response.postProcess === 'process_loan') {
+        // Acknowledge the interaction to prevent timeout
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        try {
+          const { userId, amount, lenderId } = response;
+
+          // Import loan helper functions
+          const { 
+            findOrCreateUser, 
+            getUser, 
+            calculateCreditScore, 
+            createLoan,
+            getFGRPolicy
+          } = require('./db');
+
+          // Get current base interest rate from FGR or default to 5%
+          const getBaseInterestRate = async () => {
+            try {
+              const policy = await getFGRPolicy('base_interest_rate');
+              return policy ? parseFloat(policy.policy_data.rate || 5.0) : 5.0;
+            } catch (error) {
+              return 5.0;
+            }
+          };
+
+          // Adjust interest rate based on credit score
+          const adjustInterestRateForCredit = (baseRate, creditScore) => {
+            if (creditScore >= 750) return Math.max(0, baseRate - 1);
+            if (creditScore >= 650) return baseRate;
+            if (creditScore >= 550) return baseRate + 1;
+            return baseRate + 2;
+          };
+
+          // Bot loan decision algorithm
+          const calculateBotLoanDecision = (creditScore, amount, botBalance) => {
+            if (amount <= 10) return { approved: true, reason: 'small_loan_auto_approved' };
+            if (amount > botBalance * 0.5) return { approved: false, reason: 'exceeds_bot_capacity' };
+            
+            const creditScoreNormalized = (creditScore - 300) / 550;
+            const loanSizeRatio = amount / botBalance;
+            const riskScore = creditScoreNormalized * (1 - loanSizeRatio);
+            const approvalThreshold = 0.3;
+            const finalApprovalChance = Math.max(approvalThreshold, riskScore);
+            const approved = Math.random() < finalApprovalChance;
+
+            return { approved, reason: approved ? 'risk_assessment_approved' : 'risk_assessment_denied' };
+          };
+
+          await findOrCreateUser(userId);
+          const creditScore = await calculateCreditScore(userId);
+          const baseInterestRate = await getBaseInterestRate();
+          const adjustedInterestRate = adjustInterestRateForCredit(baseInterestRate, creditScore);
+
+          let loanApproved = false;
+          let errorMessage = '';
+
+          if (lenderId === 'garry_bot') {
+            const botUser = await getUser(client.user.id);
+            const botBalance = botUser ? botUser.balance : 1000;
+            const decision = calculateBotLoanDecision(creditScore, amount, botBalance);
+            loanApproved = decision.approved;
+
+            if (!loanApproved) {
+              if (decision.reason === 'exceeds_bot_capacity') {
+                errorMessage = `❌ **Loan Application Denied**\n\n**Credit Score:** ${creditScore}\n**Requested Amount:** ${amount} GC\n**Reason:** Loan amount exceeds 50% of bot reserves\n**Max Available:** ${Math.floor(botBalance * 0.5)} GC`;
+              } else {
+                errorMessage = `❌ **Loan Application Denied**\n\n**Credit Score:** ${creditScore}\n**Requested Amount:** ${amount} GC\n**Reason:** Risk assessment indicates high default probability\n**Recommendation:** Build credit through gambling wins or maintain higher balance`;
+              }
+            }
+          } else {
+            const lender = await getUser(lenderId);
+            if (!lender || lender.balance < amount) {
+              errorMessage = `❌ <@${lenderId}> doesn't have enough GarryCoins to fulfill this loan.`;
+            } else {
+              loanApproved = true;
+            }
+          }
+
+          if (!loanApproved) {
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: errorMessage }),
+            });
+            return;
+          }
+
+          const loanResult = await createLoan(userId, lenderId, amount, adjustedInterestRate);
+          
+          if (!loanResult.success) {
+            let failMessage = '❌ **Loan Request Failed**\n\n';
+            if (loanResult.message === 'max_active_loans_exceeded') {
+              failMessage += 'You have reached the maximum number of active loans (10).\nPlease wait for some loans to be paid off before requesting new ones.';
+            } else {
+              failMessage += `Error: ${loanResult.message}`;
+            }
+            
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: failMessage }),
+            });
+            return;
+          }
+
+          const interestAmount = Math.floor(amount * (adjustedInterestRate / 100));
+          const totalDue = amount + interestAmount;
+          const dueDate = new Date(loanResult.loan.due_date);
+          const environment = process.env.NODE_ENV || 'development';
+          const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
+          
+          const dueDateString = dueDate.toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
+          });
+
+          const successMessage = `✅ **Loan Approved!**\n\n**Loan ID:** #${loanResult.loan.id}\n**Principal:** ${amount} GC\n**Interest Rate:** ${adjustedInterestRate.toFixed(2)}%\n**Interest Charge:** ${interestAmount} GC\n**Total Due:** ${totalDue} GC\n**Due Date:** ${dueDateString} EST\n**Lender:** ${lenderId === 'garry_bot' ? 'GarryCoin Bot' : `<@${lenderId}>`}\n\n💳 **Your Credit Score:** ${creditScore}\n\nThe loan amount has been deposited into your account. Payment will be automatically deducted in ${repaymentPeriod}.`;
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: successMessage }),
+          });
+
+        } catch (error) {
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: '❌ An error occurred while processing your loan request. Please try again later.' }),
+          });
+        }
+        return;
+      }
+
+      // Special post-processing for credit reports
+      if (response.postProcess === 'generate_credit_report') {
+        // Acknowledge the interaction to prevent timeout
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        try {
+          const { requesterId, targetUserId } = response;
+          const isOwnReport = targetUserId === requesterId;
+
+          const { 
+            findOrCreateUser, 
+            getUser, 
+            calculateCreditScore, 
+            getUserLoans,
+            getLoanHistory,
+            getGamblingStats
+          } = require('./db');
+
+          const getCreditRating = (score) => {
+            if (score >= 800) return 'Exceptional';
+            if (score >= 740) return 'Very Good';
+            if (score >= 670) return 'Good';
+            if (score >= 580) return 'Fair';
+            if (score >= 300) return 'Poor';
+            return 'No Score';
+          };
+
+          const getCreditFactorsExplanation = (user, gamblingStats, loanHistory) => {
+            const factors = [];
+            const balancePoints = Math.min((Math.max(user.balance, 0) / 100) * 10, 100);
+            factors.push(`💰 **Balance Factor (40%):** ${balancePoints.toFixed(0)}/100 points`);
+            
+            const winRate = gamblingStats.overall.winRate || 0;
+            const winRatePoints = winRate * 3;
+            factors.push(`🎲 **Gambling Performance (30%):** ${winRatePoints.toFixed(0)}/300 points`);
+            
+            let loanHistoryPoints = 100;
+            if (loanHistory.totalLoans > 0) {
+              const debtEventRate = loanHistory.debtEvents / loanHistory.totalLoans;
+              if (debtEventRate === 0) loanHistoryPoints = 150;
+              else if (debtEventRate <= 0.2) loanHistoryPoints = 75;
+              else loanHistoryPoints = 25;
+            }
+            factors.push(`📋 **Loan History (30%):** ${loanHistoryPoints}/150 points`);
+            
+            return factors.join('\n');
+          };
+
+          await findOrCreateUser(targetUserId);
+          const user = await getUser(targetUserId);
+
+          if (!user) {
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: '❌ User not found in the database.' }),
+            });
+            return;
+          }
+
+          const creditScore = await calculateCreditScore(targetUserId);
+          const creditRating = getCreditRating(creditScore);
+          const activeLoans = await getUserLoans(targetUserId, 'active');
+          const loanHistory = await getLoanHistory(targetUserId);
+          const gamblingStats = await getGamblingStats(targetUserId);
+
+          let report = `📊 **Credit Report${isOwnReport ? '' : ` for <@${targetUserId}>`}**\n\n`;
+          report += `🏦 **CREDIT SCORE**\n**Score:** ${creditScore} (${creditRating})\n**Range:** 300-850\n\n`;
+          report += `💳 **OUTSTANDING LOANS**\n`;
+          
+          if (activeLoans.length === 0) {
+            report += `No active loans\n\n`;
+          } else {
+            for (const loan of activeLoans) {
+              const interestAmount = Math.floor(loan.amount * (loan.interest_rate / 100));
+              const totalDue = loan.amount + interestAmount;
+              const dueDate = new Date(loan.due_date);
+              const dueDateString = dueDate.toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
+              });
+              const lenderDisplay = loan.lender_user_id === 'garry_bot' ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
+              
+              report += `**Loan #${loan.id}** - ${loan.amount} GC @ ${loan.interest_rate}%\n   Due: ${dueDateString} EST (${totalDue} GC total)\n   Lender: ${lenderDisplay}\n`;
+            }
+            report += `\n`;
+          }
+
+          report += `📈 **LOAN HISTORY SUMMARY**\n**Total Loans:** ${loanHistory.totalLoans}\n**Paid in Full:** ${loanHistory.paidLoans}\n**Defaults:** ${loanHistory.defaultedLoans}\n**On-Time Payments:** ${loanHistory.onTimePayments}\n**Debt Events:** ${loanHistory.debtEvents}\n\n`;
+
+          if (isOwnReport) {
+            report += `🔍 **CREDIT SCORE BREAKDOWN**\n${getCreditFactorsExplanation(user, gamblingStats, loanHistory)}\n\n💡 **TIPS TO IMPROVE CREDIT**\n`;
+            if (user.balance < 100) report += `• Maintain a higher GarryCoin balance\n`;
+            if (gamblingStats.overall.winRate < 50 && gamblingStats.overall.gamesPlayed > 10) report += `• Improve gambling strategy or reduce risky bets\n`;
+            if (loanHistory.debtEvents > 0) report += `• Make timely loan payments to avoid debt events\n`;
+            if (loanHistory.totalLoans === 0) report += `• Consider taking small loans and paying them back on time\n`;
+            report += `• Stay active and maintain positive account standing`;
+          }
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: report }),
+          });
+
+        } catch (error) {
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: '❌ An error occurred while generating the credit report. Please try again later.' }),
+          });
         }
         return;
       }

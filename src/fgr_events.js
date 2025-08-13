@@ -5,6 +5,9 @@ const {
   transfer, 
   recordFGREvent,
   getUser,
+  getFGRPolicy,
+  updateFGRPolicy,
+  createFGRPolicy,
   db
 } = require('./db');
 const { llmService } = require('./llm_service');
@@ -316,10 +319,17 @@ ${buybackDetails}
   }
 
   /**
-   * Make a random policy announcement with no actual effect
+   * Make a policy announcement and actually adjust interest rates
    */
   async makePolicyAnnouncement() {
     try {
+      // Get current economic metrics for rate adjustment
+      const metrics = await getEconomicMetrics();
+      
+      // Select policy stance that will determine rate direction
+      const policyStances = ['dovish', 'hawkish', 'qt', 'emergency'];
+      const selectedPolicy = policyStances[Math.floor(Math.random() * policyStances.length)];
+      
       // Random economic "topics" to discuss
       const topics = [
         'yield curve inversions in the meme-coin sector',
@@ -333,15 +343,25 @@ ${buybackDetails}
       ];
 
       const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+      
+      // Adjust interest rates based on policy stance and economic conditions
+      const rateAdjustment = await this.adjustInterestRates(metrics, selectedPolicy, randomTopic);
 
       let announcement;
       try {
         const contextualPrompt = await this.context.generateContextualPrompt('announcement', {
-          topic: randomTopic
+          topic: randomTopic,
+          policyStance: selectedPolicy,
+          rateChange: rateAdjustment.changed,
+          oldRate: rateAdjustment.oldRate,
+          newRate: rateAdjustment.newRate,
+          rationale: rateAdjustment.rationale
         });
         announcement = await llmService.generateText(contextualPrompt);
         structuredLog.info('Policy announcement generated via LLM', { 
-          topic: randomTopic 
+          topic: randomTopic,
+          policy: selectedPolicy,
+          rateChanged: rateAdjustment.changed
         });
       } catch (error) {
         structuredLog.error('Failed to generate policy announcement via LLM', error, {
@@ -352,23 +372,177 @@ ${buybackDetails}
         announcement = "The GarryCoin Federal Reserve has no comments at this time.";
       }
 
+      // Build final announcement with rate change information
+      let finalAnnouncement = `**🏛️ FEDERAL GARRYCOIN RESERVE - POLICY STATEMENT**
+
+${announcement}`;
+
+      // Add rate change announcement if rates were adjusted
+      if (rateAdjustment.changed) {
+        const direction = rateAdjustment.newRate > rateAdjustment.oldRate ? 'raised' : 'lowered';
+        finalAnnouncement += `
+
+📈 **INTEREST RATE DECISION**
+The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rateAdjustment.oldRate.toFixed(2)}% to ${rateAdjustment.newRate.toFixed(2)}%.
+
+**Rationale:** ${rateAdjustment.rationale}`;
+      }
+
+      finalAnnouncement += `
+
+*The Federal Reserve will continue to assess incoming data and adjust the stance of monetary policy as appropriate to foster maximum employment and price stability.*`;
+
       // Record the event
-      await recordFGREvent('announcement', announcement, {
+      await recordFGREvent('announcement', finalAnnouncement, {
         topic: randomTopic,
+        policy_stance: selectedPolicy,
+        rate_adjustment: rateAdjustment,
         metrics
       });
 
       // Post announcement
-      await this.broadcastAnnouncement(`**🏛️ FEDERAL GARRYCOIN RESERVE - POLICY STATEMENT**
-
-${announcement}
-
-*The Federal Reserve will continue to assess incoming data and adjust the stance of monetary policy as appropriate to foster maximum employment and price stability.*`);
+      await this.broadcastAnnouncement(finalAnnouncement);
 
       structuredLog.info('Policy announcement made', { topic: randomTopic });
 
     } catch (error) {
       structuredLog.error('Policy announcement failed', error);
+    }
+  }
+
+  /**
+   * Adjust interest rates based on economic conditions and policy stance
+   */
+  async adjustInterestRates(metrics, policyType, economicContext) {
+    try {
+      // Get current interest rate
+      const currentPolicy = await getFGRPolicy('base_interest_rate');
+      const currentRate = currentPolicy ? parseFloat(currentPolicy.policy_data.rate || 5.0) : 5.0;
+      
+      let newRate = currentRate;
+      let rationale = '';
+      
+      // Determine rate adjustment based on economic conditions and policy
+      const activityRate = metrics.userMetrics.activityRate || 0;
+      const gamblingVolume = metrics.economicMetrics.weeklyGamblingVolume || 0;
+      const totalSupply = metrics.economicMetrics.totalSupply || 1000;
+      
+      // Economic condition analysis
+      const lowActivity = activityRate < 30;
+      const lowGamblingVolume = gamblingVolume < 100;
+      const highLiquidity = totalSupply > 50000;
+      
+      // Policy-based rate adjustments
+      switch (policyType) {
+        case 'dovish':
+        case 'emergency':
+          // Stimulative policies: Lower rates to encourage borrowing
+          if (lowActivity || lowGamblingVolume) {
+            newRate = Math.max(5.0, currentRate - 2.0);
+            rationale = 'Implementing accommodative monetary policy to stimulate economic activity';
+          } else {
+            newRate = Math.max(5.0, currentRate - 1.0);
+            rationale = 'Maintaining expansionary stance to support continued growth';
+          }
+          break;
+          
+        case 'hawkish':
+        case 'qt':
+          // Restrictive policies: Raise rates to reduce borrowing/cool economy
+          if (highLiquidity || activityRate > 70) {
+            newRate = Math.min(50.0, currentRate + 3.0);
+            rationale = 'Implementing restrictive policy to combat excessive liquidity and speculation';
+          } else {
+            newRate = Math.min(50.0, currentRate + 1.5);
+            rationale = 'Tightening monetary conditions to maintain price stability';
+          }
+          break;
+          
+        default:
+          // Neutral adjustment based on economic conditions only
+          if (lowActivity && lowGamblingVolume) {
+            newRate = Math.max(5.0, currentRate - 0.5);
+            rationale = 'Minor rate reduction to address subdued economic indicators';
+          } else if (highLiquidity && activityRate > 80) {
+            newRate = Math.min(50.0, currentRate + 0.5);
+            rationale = 'Modest tightening in response to elevated market conditions';
+          } else {
+            rationale = 'Maintaining current rate given balanced economic conditions';
+          }
+      }
+      
+      // Only update if rate actually changes
+      if (Math.abs(newRate - currentRate) >= 0.1) {
+        // Update the policy
+        if (currentPolicy) {
+          await updateFGRPolicy('base_interest_rate', {
+            policy_data: { 
+              rate: newRate,
+              previous_rate: currentRate,
+              adjustment_reason: rationale,
+              economic_conditions: {
+                activity_rate: activityRate,
+                gambling_volume: gamblingVolume,
+                total_supply: totalSupply
+              }
+            }
+          });
+        } else {
+          await createFGRPolicy('base_interest_rate', {
+            rate: newRate,
+            previous_rate: currentRate,
+            adjustment_reason: rationale,
+            economic_conditions: {
+              activity_rate: activityRate,
+              gambling_volume: gamblingVolume,
+              total_supply: totalSupply
+            }
+          });
+        }
+        
+        // Record the rate change as an FGR event
+        await recordFGREvent('interest_rate_change', 
+          `Federal GarryCoin Reserve adjusts base lending rate from ${currentRate.toFixed(2)}% to ${newRate.toFixed(2)}%`, 
+          {
+            old_rate: currentRate,
+            new_rate: newRate,
+            policy_type: policyType,
+            rationale: rationale,
+            economic_conditions: {
+              activity_rate: activityRate,
+              gambling_volume: gamblingVolume,
+              total_supply: totalSupply
+            }
+          }
+        );
+        
+        structuredLog.info('FGR interest rate adjusted', {
+          oldRate: currentRate,
+          newRate: newRate,
+          policyType: policyType,
+          rationale: rationale
+        });
+        
+        return {
+          changed: true,
+          oldRate: currentRate,
+          newRate: newRate,
+          rationale: rationale
+        };
+      }
+      
+      return {
+        changed: false,
+        currentRate: currentRate,
+        rationale: rationale
+      };
+      
+    } catch (error) {
+      structuredLog.error('Failed to adjust interest rates', {
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
     }
   }
 
