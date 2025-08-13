@@ -162,6 +162,30 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         return;
       }
 
+      // Special post-processing for Make It Rain command
+      if (response.postProcess === 'make_it_rain') {
+        // Acknowledge the interaction to prevent timeout
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        let successCount = 0;
+        for (const member of response.members.values()) {
+          if (member.user.bot || member.user.id === response.senderId) continue;
+
+          await findOrCreateUser(member.user.id);
+          const result = await transfer(response.senderId, member.user.id, 1, 'user_to_user_make_it_rain');
+          if (result.success) {
+            successCount++;
+          }
+        }
+
+        await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: `You have made it rain on ${successCount} members of the server!` }),
+        });
+        return;
+      }
+
       if (response.type === 'modal') {
         return res.send({
           type: InteractionResponseType.MODAL,
