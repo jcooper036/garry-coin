@@ -394,3 +394,54 @@ This session focused on housekeeping tasks including structured logging implemen
     - Render's log aggregation works excellently with winston's JSON format, enabling powerful filtering and search capabilities.
     - Database connection issues are often related to idle timeout settings rather than application logic.
     - Structured logging provides significant value for production debugging and monitoring, especially with cloud-hosted applications.
+
+## 2025-08-13 Session Summary (Gambling Statistics Feature & MakeItRain Timeout Fix)
+
+This session focused on implementing comprehensive gambling statistics and fixing a production timeout issue.
+
+- **/garrymakeitrain Production Timeout Fix**:
+    - **Problem**: Users reported "The application did not respond" error in production servers, though the command worked correctly in test environments and coins were actually distributed.
+    - **Root Cause**: Discord's 3-second interaction response timeout was being exceeded in large servers due to the command processing transfers for every member sequentially before responding.
+    - **Solution**: Implemented deferred response pattern similar to Ride the Bus game:
+        - Modified `src/commands/garrymakeitrain.js` to return a `postProcess: 'make_it_rain'` flag instead of doing transfers immediately
+        - Added special handling in `src/index.js` to send `DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE` response immediately
+        - Process transfers in background and update original message via webhook with final result
+    - **Result**: Command now works reliably in production servers regardless of member count.
+
+- **Comprehensive Gambling Statistics Implementation**:
+    - **User Request**: User wanted to see gambling wins/losses to determine if "the bot cheats" (spoiler: it doesn't).
+    - **Database Analysis**: Identified all gambling transaction types across Heist (`heist_win`, `heist_loss`), Ride the Bus (`rtb_wager`, `rtb_win_*`, `rtb_refund_*`), and Wavelength (`wavelength_wager`, `wavelength_win`, `wavelength_refund_*`).
+    
+- **Database Functions (`src/db.js`)**:
+    - **`getGamblingStats(userId)`**: Comprehensive personal statistics calculation including:
+        - Overall performance: total wagered, won, net profit, games played, win rate, average wager
+        - Records & streaks: biggest win/loss, current win/loss streak tracking
+        - Per-game breakdown: individual stats for each game type with profit/loss analysis
+        - Transaction parsing with proper handling of wagers, wins, and refunds
+    - **`getGamblingLeaderboard(type)`**: Server-wide rankings with three modes:
+        - `profit`: Net profit/loss leaderboard 
+        - `volume`: Most games played leaderboard
+        - `winrate`: Best win percentage (minimum 10 games)
+
+- **Command Implementation**:
+    - **`/garrygamblingstats`**: Personal detailed statistics with optional user parameter
+        - Displays overall performance, records/streaks, and per-game breakdown
+        - Includes cheeky flavor text based on performance (encouragement for big losers, celebration for winners)
+        - Professional formatting with emojis and clear data presentation
+    - **`/garrygamblingboard`**: Server leaderboards with three ranking types
+        - Medal system (🥇🥈🥉) for top 3 positions
+        - Context-appropriate flavor text for each leaderboard type
+        - Shows relevant metrics for each ranking (profit amounts, game counts, win percentages)
+
+- **Technical Implementation**:
+    - Added new functions to `module.exports` in `src/db.js`
+    - Created command files in `src/commands/` directory
+    - Updated `src/command_definitions.js` with proper option definitions and choices
+    - Updated `src/index.js` imports to include new database functions
+    - Comprehensive transaction analysis logic that correctly categorizes gambling activities vs. regular transfers
+
+- **Key Features**:
+    - **Transparency**: Users can now definitively see their gambling performance and verify the bot isn't cheating
+    - **Competitive Elements**: Leaderboards encourage engagement and friendly competition
+    - **Comprehensive Analysis**: Covers all aspects of gambling activity with detailed breakdowns
+    - **User-Friendly**: Clear formatting, helpful context, and engaging presentation

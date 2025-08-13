@@ -154,6 +154,44 @@ const commands = [
   {
     name: 'garryridethebushelp',
     description: 'Explains how to play the Ride the Bus game.',
+  },
+  {
+    name: 'garrygamblingstats',
+    description: 'View detailed gambling statistics for yourself or another user.',
+    options: [
+      {
+        name: 'user',
+        description: 'The user to view gambling stats for (defaults to yourself).',
+        type: 6, // USER type
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'garrygamblingboard',
+    description: 'View gambling leaderboards for the server.',
+    options: [
+      {
+        name: 'type',
+        description: 'The type of leaderboard to display.',
+        type: 3, // STRING type
+        required: false,
+        choices: [
+          {
+            name: 'Profit/Loss',
+            value: 'profit'
+          },
+          {
+            name: 'Games Played',
+            value: 'volume'
+          },
+          {
+            name: 'Win Rate',
+            value: 'winrate'
+          }
+        ]
+      }
+    ]
   }
 ];
 
