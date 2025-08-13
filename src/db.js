@@ -136,6 +136,228 @@ async function grant(receiverId, amount, transaction_type, trx) {
   });
 }
 
+async function getGamblingStats(userId) {
+  return await db.transaction(async (trx) => {
+    // Define gambling transaction patterns
+    const wagerTypes = ['heist_loss', 'rtb_wager', 'wavelength_wager'];
+    const winTypes = ['heist_win', 'rtb_win_end_of_line', 'wavelength_win'];
+    const rtbWinPattern = 'rtb_win_cash_out_%';
+    const refundPattern = '%_refund_%';
+
+    // Get all gambling-related transactions for the user
+    const allTransactions = await trx('transactions')
+      .where(function() {
+        this.where('sending_user_id', userId).orWhere('receiving_user_id', userId);
+      })
+      .where(function() {
+        this.whereIn('transaction_type', [...wagerTypes, ...winTypes])
+          .orWhere('transaction_type', 'like', rtbWinPattern)
+          .orWhere('transaction_type', 'like', refundPattern);
+      })
+      .orderBy('created_at', 'desc');
+
+    let totalWagered = 0;
+    let totalWon = 0;
+    let gamesPlayed = 0;
+    let wins = 0;
+    
+    // Per-game stats
+    const gameStats = {
+      heist: { wagered: 0, won: 0, games: 0, wins: 0 },
+      rtb: { wagered: 0, won: 0, games: 0, wins: 0 },
+      wavelength: { wagered: 0, won: 0, games: 0, wins: 0 }
+    };
+
+    let biggestWin = 0;
+    let biggestLoss = 0;
+    let currentStreak = 0;
+    let currentStreakType = null; // 'win' or 'loss'
+
+    for (const tx of allTransactions) {
+      const isUserSending = tx.sending_user_id === userId;
+      const isUserReceiving = tx.receiving_user_id === userId;
+      const amount = tx.amount;
+      
+      // Skip refunds (they're net neutral)
+      if (tx.transaction_type.includes('refund')) continue;
+
+      let gameType = null;
+      let isWager = false;
+      let isWin = false;
+
+      // Determine game type and transaction nature
+      if (tx.transaction_type.startsWith('heist_')) {
+        gameType = 'heist';
+        if (tx.transaction_type === 'heist_loss' && isUserSending) {
+          isWager = true;
+        } else if (tx.transaction_type === 'heist_win' && isUserReceiving) {
+          isWin = true;
+        }
+      } else if (tx.transaction_type.startsWith('rtb_')) {
+        gameType = 'rtb';
+        if (tx.transaction_type === 'rtb_wager' && isUserSending) {
+          isWager = true;
+        } else if (tx.transaction_type.startsWith('rtb_win_') && isUserReceiving) {
+          isWin = true;
+        }
+      } else if (tx.transaction_type.startsWith('wavelength_')) {
+        gameType = 'wavelength';
+        if (tx.transaction_type === 'wavelength_wager' && isUserSending) {
+          isWager = true;
+        } else if (tx.transaction_type === 'wavelength_win' && isUserReceiving) {
+          isWin = true;
+        }
+      }
+
+      if (gameType && (isWager || isWin)) {
+        if (isWager) {
+          totalWagered += amount;
+          gameStats[gameType].wagered += amount;
+          gameStats[gameType].games++;
+          gamesPlayed++;
+          
+          if (amount > biggestLoss) biggestLoss = amount;
+          
+          // Update streak
+          if (currentStreakType === 'loss') {
+            currentStreak++;
+          } else {
+            currentStreak = 1;
+            currentStreakType = 'loss';
+          }
+        }
+        
+        if (isWin) {
+          totalWon += amount;
+          gameStats[gameType].won += amount;
+          gameStats[gameType].wins++;
+          wins++;
+          
+          if (amount > biggestWin) biggestWin = amount;
+          
+          // Update streak
+          if (currentStreakType === 'win') {
+            currentStreak++;
+          } else {
+            currentStreak = 1;
+            currentStreakType = 'win';
+          }
+        }
+      }
+    }
+
+    const netProfit = totalWon - totalWagered;
+    const winRate = gamesPlayed > 0 ? (wins / gamesPlayed * 100) : 0;
+    const avgWager = gamesPlayed > 0 ? (totalWagered / gamesPlayed) : 0;
+
+    return {
+      overall: {
+        totalWagered,
+        totalWon,
+        netProfit,
+        gamesPlayed,
+        wins,
+        winRate,
+        avgWager,
+        biggestWin,
+        biggestLoss,
+        currentStreak,
+        currentStreakType
+      },
+      byGame: gameStats,
+      recentTransactions: allTransactions.slice(0, 10)
+    };
+  });
+}
+
+async function getGamblingLeaderboard(type = 'profit') {
+  return await db.transaction(async (trx) => {
+    let query;
+    
+    if (type === 'profit') {
+      // Calculate net profit for each user
+      query = trx.raw(`
+        SELECT 
+          u.user_id,
+          COALESCE(wins.total_won, 0) - COALESCE(wagers.total_wagered, 0) as net_profit,
+          COALESCE(wagers.games_played, 0) as games_played
+        FROM users u
+        LEFT JOIN (
+          SELECT 
+            receiving_user_id as user_id,
+            SUM(amount) as total_won
+          FROM transactions 
+          WHERE transaction_type IN ('heist_win', 'rtb_win_end_of_line', 'wavelength_win')
+             OR transaction_type LIKE 'rtb_win_cash_out_%'
+          GROUP BY receiving_user_id
+        ) wins ON u.user_id = wins.user_id
+        LEFT JOIN (
+          SELECT 
+            sending_user_id as user_id,
+            SUM(amount) as total_wagered,
+            COUNT(*) as games_played
+          FROM transactions 
+          WHERE transaction_type IN ('heist_loss', 'rtb_wager', 'wavelength_wager')
+          GROUP BY sending_user_id
+        ) wagers ON u.user_id = wagers.user_id
+        WHERE COALESCE(wagers.games_played, 0) > 0
+        ORDER BY net_profit DESC
+        LIMIT 10
+      `);
+    } else if (type === 'volume') {
+      // Most games played
+      query = trx.raw(`
+        SELECT 
+          sending_user_id as user_id,
+          COUNT(*) as games_played,
+          SUM(amount) as total_wagered
+        FROM transactions 
+        WHERE transaction_type IN ('heist_loss', 'rtb_wager', 'wavelength_wager')
+        GROUP BY sending_user_id
+        ORDER BY games_played DESC
+        LIMIT 10
+      `);
+    } else if (type === 'winrate') {
+      // Highest win rate (min 10 games)
+      query = trx.raw(`
+        SELECT 
+          u.user_id,
+          COALESCE(wins.win_count, 0) as wins,
+          COALESCE(wagers.games_played, 0) as games_played,
+          CASE 
+            WHEN COALESCE(wagers.games_played, 0) > 0 
+            THEN ROUND(COALESCE(wins.win_count, 0) * 100.0 / wagers.games_played, 1)
+            ELSE 0 
+          END as win_rate
+        FROM users u
+        LEFT JOIN (
+          SELECT 
+            receiving_user_id as user_id,
+            COUNT(*) as win_count
+          FROM transactions 
+          WHERE transaction_type IN ('heist_win', 'rtb_win_end_of_line', 'wavelength_win')
+             OR transaction_type LIKE 'rtb_win_cash_out_%'
+          GROUP BY receiving_user_id
+        ) wins ON u.user_id = wins.user_id
+        LEFT JOIN (
+          SELECT 
+            sending_user_id as user_id,
+            COUNT(*) as games_played
+          FROM transactions 
+          WHERE transaction_type IN ('heist_loss', 'rtb_wager', 'wavelength_wager')
+          GROUP BY sending_user_id
+        ) wagers ON u.user_id = wagers.user_id
+        WHERE COALESCE(wagers.games_played, 0) >= 10
+        ORDER BY win_rate DESC
+        LIMIT 10
+      `);
+    }
+    
+    const results = await query;
+    return results.rows || results;
+  });
+}
+
 module.exports = {
   db,
   findOrCreateUser,
@@ -167,6 +389,9 @@ module.exports = {
   cancelWavelengthGame,
   // Wordle
   processWordleTransaction,
+  // Gambling Stats
+  getGamblingStats,
+  getGamblingLeaderboard,
 };
 
 // --- Ride the Bus Functions
