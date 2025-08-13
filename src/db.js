@@ -166,7 +166,6 @@ module.exports = {
   getWavelengthPlayer,
   cancelWavelengthGame,
   // Wordle
-  checkWordleDay,
   processWordleTransaction,
 };
 
@@ -317,13 +316,6 @@ async function cancelWavelengthGame(gameId) {
 }
 
 // --- Wordle Functions ---
-
-async function checkWordleDay(today, userIds) {
-  return withRetry(() => db('wordle_rewards')
-    .where('reward_date', today)
-    .whereIn('user_id', userIds)
-    .first());
-}
 
 async function processWordleTransaction(userId, tries, amount, isCheater, transactionType) {
   const today = new Date().toISOString().slice(0, 10);
