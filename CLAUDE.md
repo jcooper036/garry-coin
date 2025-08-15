@@ -77,6 +77,20 @@ When troubleshooting mysterious failures, timeouts, or hanging processes, always
 
 # Memory
 
+## 2025-08-15 Session Summary (Ride the Bus Money Glitch Fix & transferThenGrant Implementation)
+
+Fixed critical infinite money exploit in Ride the Bus game and implemented proper money flow controls:
+- **Security Issue Identified**: RTB game was creating money from thin air using `grant()` function for all winnings, while only collecting wagers from players via `transfer()` to bot
+- **Money Glitch Analysis**: Players paid wagers to bot, but winners received payouts created from nothing, enabling infinite money generation through large bets
+- **New Function**: Implemented `transferThenGrant(senderId, receiverId, amount, transaction_type)` function that first attempts transfer from sender, then grants remainder if insufficient funds
+- **Smart Money Flow**: Bot pays winnings from collected wagers first, only creates new money when bot balance is insufficient (with structured logging for monitoring)
+- **RTB Integration**: Updated `ridethebus_helpers.js` to use `transferThenGrant` instead of `grant` for end-of-line and cash-out winnings (lines 375, 385)
+- **Database Changes**: Added `transferThenGrant` to exports, imported in RTB helpers, maintains same interface as `transfer()` function
+- **Testing Infrastructure**: Created comprehensive test script `test_transfer_then_grant.js` with multiple scenarios, edge cases, and balance verification
+- **Wordle Migration**: Fixed unrelated duplicate key error by creating migration to remove unique constraint on `wordle_rewards` table
+- **Financial Controls**: System now prevents infinite money creation while maintaining game functionality, with audit trail for any money generation events
+- **Key Architecture**: Preserved existing `transfer()` and `grant()` functions, added hybrid function that intelligently chooses between transfer vs creation based on sender balance
+
 ## 2025-08-13 Session Summary (Federal GarryCoin Reserve Implementation & Debugging)
 
 Implemented comprehensive Federal GarryCoin Reserve (FGR) system with AI-driven economic interventions:
