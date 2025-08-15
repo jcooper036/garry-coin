@@ -288,6 +288,24 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garryquerylanguage',
+    description: 'Execute read-only SQL queries against the database (admin only).',
+    options: [
+      {
+        name: 'sql',
+        description: 'The SQL query to execute (SELECT statements only).',
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: 'public',
+        description: 'Show results publicly (defaults to private).',
+        type: 5, // BOOLEAN type
+        required: false,
+      },
+    ],
   }
 ];
 
