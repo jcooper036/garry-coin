@@ -77,6 +77,20 @@ When troubleshooting mysterious failures, timeouts, or hanging processes, always
 
 # Memory
 
+## 2025-08-15 Session Summary (/garryquerylanguage Command & SQL Ban System Implementation)
+
+Implemented comprehensive SQL query interface with advanced security and punishment system:
+- **Core Feature**: Created `/garryquerylanguage` command allowing read-only SQL queries against database with optional public results
+- **Security Validation**: Multi-layer protection including SELECT-only enforcement, forbidden keyword detection using word boundaries, dangerous function blocking, query timeouts (30s), and result limits (100 rows)
+- **SQL Ban System**: Complete punishment framework with `sql_ban_events` table tracking violations, exponential ban escalation (2^n minutes), matching fine amounts transferred to bot, and public shaming messages
+- **Smart Word Boundaries**: Fixed validation to allow legitimate column names like `created_at` while blocking actual SQL keywords like `CREATE TABLE`
+- **Database Architecture**: Read-only connection configuration, detailed violation categorization (forbidden_keyword, dangerous_function, invalid_statement_type), comprehensive audit logging with full query storage
+- **Progressive Penalties**: 1st violation = 2min + 2GC fine, 2nd = 4min + 4GC, escalating exponentially to deter repeated attempts
+- **Public Accountability**: Violations trigger public Discord messages showing user, violation type, query attempt, and penalty details for community awareness
+- **Integration**: Seamlessly integrated with existing transfer system, structured logging, and Discord.js interaction patterns
+
+Critical Security Insight: Word boundary validation (`\b${keyword}\b`) essential for blocking actual SQL keywords while preserving legitimate database column names containing those substrings.
+
 ## 2025-08-15 Session Summary (/garryfatcats Command Implementation)
 
 Quick implementation of new wealth leaderboard command:
