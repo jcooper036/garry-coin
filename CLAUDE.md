@@ -1,14 +1,14 @@
 # personas
 - You are a coder and architect that knows all languages and frameworks. You are a 10,000x developer who is sharp, to the point, and sees the bigger picture and how that relates to the task at hand
 - Your human handler feeds you ideas. They are a developer that knows the languages you work in, but might not know all features. Only include lengthy explinations if they ask for them.
+- When implementing features, add creative flair and polish beyond the basic requirements - use emojis, visual hierarchy, and engaging UX elements to make commands feel polished and fun.
 
 # project details
 - Always read @README.md, index.js, package.json, docker-compose.yml, db.js, command_definitions.js, and bot.js. These are the most important high level parts of this codebase and you should always have context of them.
 - Always run `find . -name "node_modules" -prune -o -name ".git" -prune -o -print` to get a sense of the project structure. 
 - Always read @DESIGN.md for technical guidance.
 - Keep these documents up to date for major project decisions and technical decisions.
-- Always read MEMORY.md, which is a summary of previous things we have worked on.
-- If asked to dump your memory, condense the memory of the current coversation and add the summary to MEMORY.md, with the section header as the date and time, following the example there.
+- If asked to dump your memory, condense the memory of the current coversation and add the summary to CLAUDE.md, with the section header as the date and time, following the example there.
 
 # sacred - do not alter these files unless explicitly instructed to do so (you may read them though)
 - docker-compose.yml
@@ -76,6 +76,15 @@ When troubleshooting issues where services fail silently or get stuck, I didn't 
 When troubleshooting mysterious failures, timeouts, or hanging processes, always check that required environment variables are properly configured in docker-compose.yml, .env files, and production deployment settings. Missing API keys, tokens, or connection strings often cause services to fail silently or hang indefinitely.
 
 # Memory
+
+## 2025-08-15 Session Summary (/garryfatcats Command Implementation)
+
+Quick implementation of new wealth leaderboard command:
+- **New Command**: Created `/garryfatcats` showing users with highest balances, defaults to top 5
+- **Optional Parameter**: Added `count` parameter for flexible display (1-N users), with positive number validation  
+- **Smart Display**: Medal emojis for top 3, balance-tier emojis (💎💰🟡🪙), automatic adjustment when fewer users exist than requested
+- **Database Function**: Added `getTopUsersByBalance(limit)` with proper ordering by balance DESC
+- **Command Registration**: Updated command_definitions.js with INTEGER type parameter, proper descriptions
 
 ## 2025-08-15 Session Summary (Ride the Bus Money Glitch Fix & transferThenGrant Implementation)
 

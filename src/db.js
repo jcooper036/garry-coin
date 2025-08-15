@@ -434,6 +434,13 @@ async function getGamblingLeaderboard(type = 'profit') {
   });
 }
 
+async function getTopUsersByBalance(limit = 10) {
+  return withRetry(() => db('users')
+    .select('user_id', 'balance')
+    .orderBy('balance', 'desc')
+    .limit(limit));
+}
+
 module.exports = {
   db,
   findOrCreateUser,
@@ -469,6 +476,7 @@ module.exports = {
   // Gambling Stats
   getGamblingStats,
   getGamblingLeaderboard,
+  getTopUsersByBalance,
   // Federal GarryCoin Reserve
   recordFGREvent,
   getFGREvents,

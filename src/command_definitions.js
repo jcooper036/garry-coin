@@ -276,6 +276,18 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garryfatcats',
+    description: 'Shows the users with the highest balances.',
+    options: [
+      {
+        name: 'count',
+        description: 'The number of users to show (defaults to 5).',
+        type: 4, // INTEGER type
+        required: false,
+      },
+    ],
   }
 ];
 
