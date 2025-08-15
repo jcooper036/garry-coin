@@ -9,7 +9,7 @@ const Payouts = {
     1: 1,
     2: 2,
     3: 4,
-    4: 9, // End of the line
+    4: 100, // End of the line
 };
 
 
