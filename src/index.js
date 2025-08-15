@@ -48,9 +48,9 @@ const loadCommands = (dir) => {
       if (command.name && command.execute) {
         commands.set(command.name, command);
       } else {
-        structuredLog.warn('Command missing required properties', { 
-          filePath: fullPath, 
-          category: 'system' 
+        structuredLog.warn('Command missing required properties', {
+          filePath: fullPath,
+          category: 'system'
         });
       }
     }
@@ -198,8 +198,8 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
             await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                content: '❌ Federal Reserve report generation timed out. The economic modeling systems are currently under stress. Please try again later.' 
+              body: JSON.stringify({
+                content: '❌ Federal Reserve report generation timed out. The economic modeling systems are currently under stress. Please try again later.'
               }),
             });
           } catch (error) {
@@ -209,15 +209,15 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
         try {
           structuredLog.info('Starting FGR report generation', { userId: response.userId });
-          
+
           const context = new (require('./fgr_context')).FGRContext();
           structuredLog.info('FGRContext created successfully');
-          
+
           // Get current economic data and context
           structuredLog.info('Fetching economic metrics');
           const metrics = await getEconomicMetrics();
           structuredLog.info('Economic metrics fetched', { metricsKeys: Object.keys(metrics) });
-          
+
           // Get current interest rate
           structuredLog.info('Fetching current interest rate');
           let currentInterestRate = 5.0;
@@ -228,11 +228,11 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           } catch (error) {
             structuredLog.warn('Failed to fetch interest rate, using default', { defaultRate: currentInterestRate });
           }
-          
+
           structuredLog.info('Fetching recent FGR events');
           const recentEvents = await getFGREvents(3);
           structuredLog.info('Recent events fetched', { eventCount: recentEvents.length });
-          
+
           structuredLog.info('Getting market context');
           const marketContext = await context.getMarketContext();
           structuredLog.info('Market context received', { contextKeys: Object.keys(marketContext) });
@@ -262,7 +262,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           structuredLog.info('Processing recent events');
           let eventsText = '';
           if (recentEvents.length > 0) {
-            eventsText = recentEvents.map(event => 
+            eventsText = recentEvents.map(event =>
               `• ${event.event_type.toUpperCase()}: ${event.description.substring(0, 60)}...`
             ).join('\n');
           } else {
@@ -281,12 +281,12 @@ Write a concise 2-3 sentence economic analysis using Federal Reserve terminology
 
           const { llmService } = require('./llm_service');
           let economicAnalysis;
-          
+
           // Add timeout to LLM call to prevent hanging
-          const llmTimeout = new Promise((_, reject) => 
+          const llmTimeout = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('LLM timeout')), 15000)
           );
-          
+
           try {
             structuredLog.info('Calling LLM service with timeout');
             economicAnalysis = await Promise.race([
@@ -316,14 +316,14 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 *This report contains forward-looking statements subject to GarryCoin market volatility and regulatory capture by Discord moderators.*`;
 
           // Check if message is too long for Discord (2000 char limit)
-          const finalReport = fullReport.length > 2000 
+          const finalReport = fullReport.length > 2000
             ? fullReport.substring(0, 1950) + '...\n\n*[Report truncated due to length]*'
             : fullReport;
 
-          structuredLog.info('Final report prepared', { 
-            originalLength: fullReport.length, 
+          structuredLog.info('Final report prepared', {
+            originalLength: fullReport.length,
             finalLength: finalReport.length,
-            truncated: fullReport.length > 2000 
+            truncated: fullReport.length > 2000
           });
 
           // Send the final report
@@ -336,43 +336,43 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
           if (!webhookResponse.ok) {
             const errorText = await webhookResponse.text();
-            structuredLog.error('Discord webhook failed', { 
+            structuredLog.error('Discord webhook failed', {
               status: webhookResponse.status,
               statusText: webhookResponse.statusText,
               errorText: errorText,
-              userId: response.userId 
+              userId: response.userId
             });
             throw new Error(`Discord webhook failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
           }
 
           structuredLog.info('FGR economic report sent successfully', { userId: response.userId });
-          
+
           // Clear the timeout since we completed successfully
           clearTimeout(processTimeout);
 
         } catch (error) {
           // Clear timeout on error as well
           clearTimeout(processTimeout);
-          structuredLog.error('Failed to generate FGR economic report', { 
-            error: error.message, 
+          structuredLog.error('Failed to generate FGR economic report', {
+            error: error.message,
             stack: error.stack,
-            userId: response.userId 
+            userId: response.userId
           });
-          
+
           // Send error message
           try {
             await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
+              body: JSON.stringify({
                 content: 'The Federal Reserve\'s economic modeling systems are experiencing a temporary outage. Please consult your financial advisor or try again later.',
-                flags: InteractionResponseFlags.EPHEMERAL 
+                flags: InteractionResponseFlags.EPHEMERAL
               }),
             });
           } catch (fetchError) {
-            structuredLog.error('Failed to send error message to Discord', { 
-              error: fetchError.message, 
-              userId: response.userId 
+            structuredLog.error('Failed to send error message to Discord', {
+              error: fetchError.message,
+              userId: response.userId
             });
           }
         }
@@ -388,10 +388,10 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           const { userId, amount, lenderId } = response;
 
           // Import loan helper functions
-          const { 
-            findOrCreateUser, 
-            getUser, 
-            calculateCreditScore, 
+          const {
+            findOrCreateUser,
+            getUser,
+            calculateCreditScore,
             createLoan,
             getFGRPolicy
           } = require('./db');
@@ -418,7 +418,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           const calculateBotLoanDecision = (creditScore, amount, botBalance) => {
             if (amount <= 10) return { approved: true, reason: 'small_loan_auto_approved' };
             if (amount > botBalance * 0.5) return { approved: false, reason: 'exceeds_bot_capacity' };
-            
+
             const creditScoreNormalized = (creditScore - 300) / 550;
             const loanSizeRatio = amount / botBalance;
             const riskScore = creditScoreNormalized * (1 - loanSizeRatio);
@@ -469,7 +469,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           }
 
           const loanResult = await createLoan(userId, lenderId, amount, adjustedInterestRate);
-          
+
           if (!loanResult.success) {
             let failMessage = '❌ **Loan Request Failed**\n\n';
             if (loanResult.message === 'max_active_loans_exceeded') {
@@ -477,7 +477,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
             } else {
               failMessage += `Error: ${loanResult.message}`;
             }
-            
+
             await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -491,7 +491,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           const dueDate = new Date(loanResult.loan.due_date);
           const environment = process.env.NODE_ENV || 'development';
           const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
-          
+
           const dueDateString = dueDate.toLocaleDateString('en-US', {
             month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
           });
@@ -523,10 +523,10 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           const { requesterId, targetUserId } = response;
           const isOwnReport = targetUserId === requesterId;
 
-          const { 
-            findOrCreateUser, 
-            getUser, 
-            calculateCreditScore, 
+          const {
+            findOrCreateUser,
+            getUser,
+            calculateCreditScore,
             getUserLoans,
             getLoanHistory,
             getGamblingStats
@@ -545,11 +545,11 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
             const factors = [];
             const balancePoints = Math.min((Math.max(user.balance, 0) / 100) * 10, 100);
             factors.push(`💰 **Balance Factor (40%):** ${balancePoints.toFixed(0)}/100 points`);
-            
+
             const winRate = gamblingStats.overall.winRate || 0;
             const winRatePoints = winRate * 3;
             factors.push(`🎲 **Gambling Performance (30%):** ${winRatePoints.toFixed(0)}/300 points`);
-            
+
             let loanHistoryPoints = 100;
             if (loanHistory.totalLoans > 0) {
               const debtEventRate = loanHistory.debtEvents / loanHistory.totalLoans;
@@ -558,7 +558,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
               else loanHistoryPoints = 25;
             }
             factors.push(`📋 **Loan History (30%):** ${loanHistoryPoints}/150 points`);
-            
+
             return factors.join('\n');
           };
 
@@ -583,7 +583,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           let report = `📊 **Credit Report${isOwnReport ? '' : ` for <@${targetUserId}>`}**\n\n`;
           report += `🏦 **CREDIT SCORE**\n**Score:** ${creditScore} (${creditRating})\n**Range:** 300-850\n\n`;
           report += `💳 **OUTSTANDING LOANS**\n`;
-          
+
           if (activeLoans.length === 0) {
             report += `No active loans\n\n`;
           } else {
@@ -595,7 +595,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
                 month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
               });
               const lenderDisplay = loan.lender_user_id === 'garry_bot' ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
-              
+
               report += `**Loan #${loan.id}** - ${loan.amount} GC @ ${loan.interest_rate}%\n   Due: ${dueDateString} EST (${totalDue} GC total)\n   Lender: ${lenderDisplay}\n`;
             }
             report += `\n`;
@@ -831,7 +831,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           await cancelBusGame(game.id);
           const players = await getBusGamePlayers(game.id);
           for (const player of players) {
-            await grant(player.user_id, game.wager, 'rtb_refund_cancel');
+            await transfer(client.user.id, player.user_id, game.wager, 'rtb_refund_cancel');
           }
 
           const cancelledEmbed = await buildGameEmbed(game.id);
@@ -942,7 +942,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           targetId,
           wager,
           balances: { thief: thiefBalance, target: targetBalance },
-          adjustments: { 
+          adjustments: {
             activity: parseFloat(activityAdjustment.toFixed(4)),
             wealth: parseFloat(wealthAdjustment.toFixed(4))
           },
