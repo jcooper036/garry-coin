@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db, getBusGame, getBusGamePlayers, getBusGamePlayer, updateBusGame, updateBusGamePlayer, grant, transfer } = require('../../../db');
+const { db, getBusGame, getBusGamePlayers, getBusGamePlayer, updateBusGame, updateBusGamePlayer, grant, transfer, transferThenGrant } = require('../../../db');
 
 const JOIN_PERIOD_SECONDS = 5;
 const ROUND_TIMER_SECONDS = 15;
@@ -372,7 +372,7 @@ async function endGame(gameId, client) {
             for (const player of endOfLine) {
                 const winnings = game.wager * Payouts[4];
                 console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for reaching the end.`);
-                await grant(player.user_id, winnings, 'rtb_win_end_of_line', trx);
+                await transferThenGrant(client.user.id, player.user_id, winnings, 'rtb_win_end_of_line');
                 summary += `<@${player.user_id}> made it all the way and wins **${winnings} GC**!\n`;
             }
             summary += '\n';
@@ -381,8 +381,8 @@ async function endGame(gameId, client) {
         if (cashedOut.length > 0) {
             for (const player of cashedOut) {
                 const winnings = game.wager * Payouts[player.stops_rode];
-                console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
-                await grant(player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`, trx);
+                console.log(`[Game ${gameId}] Transfer/granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
+                await transfer(client.user.id, player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
                 summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
             }
             summary += '\n';

@@ -116,6 +116,38 @@ async function transfer(senderId, receiverId, amount, transaction_type) {
   });
 }
 
+async function transferThenGrant(senderId, receiverId, amount, transaction_type) {
+  if (amount <= 0) {
+    return { success: false, message: 'Amount must be positive.' };
+  }
+  return db.transaction(async trx => {
+    const sender = await findOrCreateUser(senderId);
+    const receiver = await findOrCreateUser(receiverId);
+    if (sender.balance >= amount) {
+      // Transfer the full amount
+      await transfer(senderId, receiverId, amount, transaction_type);
+      return {
+        success: true, message: `Transfer/grant successful (${sender.balance} transferred.`
+      };
+    } else {
+      // Send what they do have and grant the rest
+      if (sender.balance > 0) {
+        await transfer(senderId, receiverId, sender.balance, transaction_type);
+      }
+      const remainder = amount - sender.balance;
+      if (remainder > 0) {
+        await grant(receiverId, remainder, transaction_type, trx);
+        structuredLog.warn('Money created via transferThenGrant', {
+          senderId, receiverId, requestedAmount: amount, transferredAmount: sender.balance, grantedAmount: remainder, transactionType: transaction_type
+        });
+      }
+      return {
+        success: true, message: `Transfer/grant successful (${sender.balance} transferred, ${remainder} granted).`
+      };
+    }
+  });
+}
+
 async function recordTransaction(sending_user_id, receiving_user_id, amount, transaction_type, trx) {
   await (trx || db)('transactions').insert({
     sending_user_id,
@@ -149,7 +181,7 @@ async function getGamblingStats(userId) {
   return await db.transaction(async (trx) => {
     // Get heist stats from transactions (no dedicated game table)
     const heistTransactions = await trx('transactions')
-      .where(function() {
+      .where(function () {
         this.where('sending_user_id', userId).orWhere('receiving_user_id', userId);
       })
       .where('transaction_type', 'like', 'heist_%')
@@ -183,10 +215,10 @@ async function getGamblingStats(userId) {
 
     // Get all gambling transactions for overall stats and streaks
     const allGamblingTransactions = await trx('transactions')
-      .where(function() {
+      .where(function () {
         this.where('sending_user_id', userId).orWhere('receiving_user_id', userId);
       })
-      .where(function() {
+      .where(function () {
         this.where('transaction_type', 'like', 'heist_%')
           .orWhere('transaction_type', 'like', 'rtb_%')
           .orWhere('transaction_type', 'like', 'wavelength_%');
@@ -198,7 +230,7 @@ async function getGamblingStats(userId) {
     const heistStats = { wagered: 0, won: 0, games: 0, wins: 0 };
     const heistWins = heistTransactions.filter(t => t.transaction_type === 'heist_win' && t.receiving_user_id === userId);
     const heistLosses = heistTransactions.filter(t => t.transaction_type === 'heist_loss' && t.sending_user_id === userId);
-    
+
     heistStats.games = heistWins.length + heistLosses.length;
     heistStats.wins = heistWins.length;
     heistStats.wagered = heistLosses.reduce((sum, t) => sum + t.amount, 0);
@@ -216,7 +248,7 @@ async function getGamblingStats(userId) {
       .where('sending_user_id', userId)
       .where('transaction_type', 'wavelength_wager')
       .whereNot('transaction_type', 'like', '%_refund_%');
-    
+
     const wavelengthStats = { wagered: 0, won: 0, games: 0, wins: 0 };
     wavelengthStats.games = wavelengthWagerTransactions.length;
     wavelengthStats.wins = wavelengthWinTransactions.length;
@@ -243,7 +275,7 @@ async function getGamblingStats(userId) {
       if (isUserSending && (tx.transaction_type.includes('loss') || tx.transaction_type.includes('wager'))) {
         // This is a loss/wager
         if (amount > biggestLoss) biggestLoss = amount;
-        
+
         if (currentStreakType === 'loss') {
           currentStreak++;
         } else {
@@ -253,7 +285,7 @@ async function getGamblingStats(userId) {
       } else if (isUserReceiving && tx.transaction_type.includes('win')) {
         // This is a win
         if (amount > biggestWin) biggestWin = amount;
-        
+
         if (currentStreakType === 'win') {
           currentStreak++;
         } else {
@@ -294,99 +326,99 @@ async function getGamblingStats(userId) {
 async function getGamblingLeaderboard(type = 'profit') {
   return await db.transaction(async (trx) => {
     let query;
-    
+
     if (type === 'profit') {
       // Calculate net profit for each user
       query = trx.raw(`
         SELECT 
           u.user_id,
           COALESCE(wins.total_won, 0) - COALESCE(wagers.total_wagered, 0) as net_profit,
-          COALESCE(wagers.games_played, 0) as games_played
+    COALESCE(wagers.games_played, 0) as games_played
         FROM users u
-        LEFT JOIN (
-          SELECT 
+        LEFT JOIN(
+      SELECT 
             receiving_user_id as user_id,
-            SUM(amount) as total_won
+      SUM(amount) as total_won
           FROM transactions 
-          WHERE transaction_type IN ('heist_win', 'rtb_win_end_of_line', 'wavelength_win')
+          WHERE transaction_type IN('heist_win', 'rtb_win_end_of_line', 'wavelength_win')
              OR transaction_type LIKE 'rtb_win_cash_out_%'
           GROUP BY receiving_user_id
-        ) wins ON u.user_id = wins.user_id
-        LEFT JOIN (
-          SELECT 
+    ) wins ON u.user_id = wins.user_id
+        LEFT JOIN(
+      SELECT 
             sending_user_id as user_id,
-            SUM(amount) as total_wagered,
-            COUNT(*) as games_played
+      SUM(amount) as total_wagered,
+      COUNT(*) as games_played
           FROM transactions 
-          WHERE transaction_type IN ('heist_loss', 'rtb_wager', 'wavelength_wager')
+          WHERE transaction_type IN('heist_loss', 'rtb_wager', 'wavelength_wager')
           GROUP BY sending_user_id
-        ) wagers ON u.user_id = wagers.user_id
+    ) wagers ON u.user_id = wagers.user_id
         WHERE COALESCE(wagers.games_played, 0) > 0
         ORDER BY net_profit DESC
         LIMIT 10
-      `);
+    `);
     } else if (type === 'volume') {
       // Most games played
       query = trx.raw(`
-        SELECT 
-          sending_user_id as user_id,
-          COUNT(*) as games_played,
-          SUM(amount) as total_wagered
+  SELECT
+  sending_user_id as user_id,
+    COUNT(*) as games_played,
+    SUM(amount) as total_wagered
         FROM transactions 
-        WHERE transaction_type IN ('heist_loss', 'rtb_wager', 'wavelength_wager')
+        WHERE transaction_type IN('heist_loss', 'rtb_wager', 'wavelength_wager')
         GROUP BY sending_user_id
         ORDER BY games_played DESC
         LIMIT 10
-      `);
+    `);
     } else if (type === 'winrate') {
       // Highest win rate (min 10 games) - using proper game tables for RTB
       query = trx.raw(`
-        WITH heist_stats AS (
-          SELECT 
+        WITH heist_stats AS(
+      SELECT 
             CASE 
               WHEN t.sending_user_id IS NOT NULL THEN t.sending_user_id
               ELSE t.receiving_user_id 
             END as user_id,
-            COUNT(*) as games,
-            SUM(CASE WHEN t.transaction_type = 'heist_win' THEN 1 ELSE 0 END) as wins
+      COUNT(*) as games,
+      SUM(CASE WHEN t.transaction_type = 'heist_win' THEN 1 ELSE 0 END) as wins
           FROM transactions t
-          WHERE t.transaction_type IN ('heist_win', 'heist_loss')
+          WHERE t.transaction_type IN('heist_win', 'heist_loss')
           GROUP BY CASE 
             WHEN t.sending_user_id IS NOT NULL THEN t.sending_user_id
             ELSE t.receiving_user_id 
           END
-        ),
-        rtb_stats AS (
-          SELECT 
+    ),
+    rtb_stats AS(
+      SELECT 
             bgp.user_id,
-            COUNT(*) as games,
-            SUM(CASE WHEN bgp.player_status = 'cashed_out' THEN 1 ELSE 0 END) as wins
+      COUNT(*) as games,
+      SUM(CASE WHEN bgp.player_status = 'cashed_out' THEN 1 ELSE 0 END) as wins
           FROM bus_games bg
           JOIN bus_game_players bgp ON bg.id = bgp.game_id
           WHERE bg.status = 'finished'
           GROUP BY bgp.user_id
-        ),
-        wavelength_stats AS (
-          SELECT 
+    ),
+      wavelength_stats AS(
+        SELECT 
             t.sending_user_id as user_id,
-            COUNT(*) as games,
-            COUNT(w.receiving_user_id) as wins
+        COUNT(*) as games,
+        COUNT(w.receiving_user_id) as wins
           FROM transactions t
           LEFT JOIN transactions w ON w.receiving_user_id = t.sending_user_id 
             AND w.transaction_type = 'wavelength_win'
             AND DATE(w.created_at) = DATE(t.created_at)
           WHERE t.transaction_type = 'wavelength_wager'
           GROUP BY t.sending_user_id
-        )
-        SELECT 
-          u.user_id,
-          COALESCE(h.wins, 0) + COALESCE(r.wins, 0) + COALESCE(w.wins, 0) as wins,
-          COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0) as games_played,
-          CASE 
+      )
+  SELECT
+  u.user_id,
+    COALESCE(h.wins, 0) + COALESCE(r.wins, 0) + COALESCE(w.wins, 0) as wins,
+    COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0) as games_played,
+    CASE 
             WHEN COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0) > 0 
             THEN ROUND((COALESCE(h.wins, 0) + COALESCE(r.wins, 0) + COALESCE(w.wins, 0)) * 100.0 / (COALESCE(h.games, 0) + COALESCE(r.games, 0) + COALESCE(w.games, 0)), 1)
-            ELSE 0 
-          END as win_rate
+            ELSE 0
+  END as win_rate
         FROM users u
         LEFT JOIN heist_stats h ON u.user_id = h.user_id
         LEFT JOIN rtb_stats r ON u.user_id = r.user_id  
@@ -396,7 +428,7 @@ async function getGamblingLeaderboard(type = 'profit') {
         LIMIT 10
       `);
     }
-    
+
     const results = await query;
     return results.rows || results;
   });
@@ -406,6 +438,7 @@ module.exports = {
   db,
   findOrCreateUser,
   transfer,
+  transferThenGrant,
   recordTransaction,
   grant,
   updateUserActivity,
@@ -475,7 +508,7 @@ async function createBusGame(hostId, channelId, messageId, wager) {
       user_id: hostId,
     });
 
-    console.log(`Created new bus game with ID: ${game.id} by host: ${hostId}`);
+    console.log(`Created new bus game with ID: ${game.id} by host: ${hostId} `);
     return game;
   }));
 }
@@ -507,7 +540,7 @@ async function addPlayerToBusGame(gameId, userId) {
       user_id: userId,
     });
 
-    console.log(`Added player ${userId} to game ${gameId}`);
+    console.log(`Added player ${userId} to game ${gameId} `);
     return { success: true };
   });
 }
@@ -547,7 +580,7 @@ async function createWavelengthGame(hostId, channelId, messageId, wager, scaleLe
       show_player_guesses: showPlayerGuesses,
     }).returning('*');
 
-    console.log(`Created new Wavelength game with ID: ${game.id} by host: ${hostId}`);
+    console.log(`Created new Wavelength game with ID: ${game.id} by host: ${hostId} `);
     return game;
   }));
 }
@@ -580,7 +613,7 @@ async function addPlayerToWavelengthGame(gameId, userId) {
       player_status: 'joined',
     });
 
-    console.log(`Added player ${userId} to game ${gameId}`);
+    console.log(`Added player ${userId} to game ${gameId} `);
     return { success: true };
   });
 }
@@ -706,29 +739,29 @@ async function getEconomicMetrics() {
     ] = await Promise.all([
       // Total registered users
       db('users').count('* as count').first(),
-      
+
       // Active users (last 7 days)
       db('users')
         .where('last_active_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
         .count('* as count')
         .first(),
-      
+
       // Total GarryCoin in circulation
       db('users').sum('balance as total').first(),
-      
+
       // Recent transaction volume (last 24 hours)
       db('transactions')
         .where('created_at', '>=', new Date(Date.now() - 24 * 60 * 60 * 1000))
         .count('* as count')
         .first(),
-      
+
       // Total gambling volume (last 7 days)
       db('transactions')
         .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
         .whereIn('transaction_type', ['heist_loss', 'rtb_wager', 'wavelength_wager'])
         .sum('amount as total')
         .first(),
-      
+
       // Heist metrics
       db('transactions')
         .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
@@ -739,7 +772,7 @@ async function getEconomicMetrics() {
           db.raw('SUM(CASE WHEN transaction_type = \'heist_loss\' THEN amount ELSE 0 END) as volume')
         )
         .first(),
-      
+
       // RTB metrics
       db('bus_games')
         .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
@@ -750,7 +783,7 @@ async function getEconomicMetrics() {
           db.raw('SUM(wager) as total_volume')
         )
         .first(),
-      
+
       // Wavelength metrics
       db('wavelength_games')
         .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
@@ -851,7 +884,7 @@ async function createLoan(borrowerId, lenderId, amount, interestRate) {
     // Create the loan record with environment-dependent due date
     const dueDate = new Date();
     const environment = process.env.NODE_ENV || 'development';
-    
+
     if (environment === 'development') {
       // Development: 5 minutes for quick testing
       dueDate.setMinutes(dueDate.getMinutes() + 5);
@@ -876,7 +909,7 @@ async function createLoan(borrowerId, lenderId, amount, interestRate) {
       // User-to-user loan - use transfer function
       const transferResult = await transfer(lenderId, borrowerId, amount, 'loan_disbursement');
       if (!transferResult.success) {
-        throw new Error(`Transfer failed: ${transferResult.message}`);
+        throw new Error(`Transfer failed: ${transferResult.message} `);
       }
     }
 
@@ -933,7 +966,7 @@ async function payLoan(loanId) {
     if (borrower.balance < totalDue) {
       // User doesn't have enough money - they'll go into debt
       wentIntoDebt = true;
-      
+
       // Check if this would exceed debt limit (-1000 GC)
       const newBalance = borrower.balance - totalDue;
       if (newBalance < -1000) {
@@ -1017,9 +1050,9 @@ async function checkDailyLoanLimit(userId, lenderId) {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const todayLoansFromLender = await db('loans')
-      .where({ 
+      .where({
         borrower_user_id: userId,
-        lender_user_id: lenderId 
+        lender_user_id: lenderId
       })
       .where('created_at', '>=', today)
       .where('created_at', '<', tomorrow)
@@ -1037,7 +1070,7 @@ async function checkDailyLoanLimit(userId, lenderId) {
 async function getLoanHistory(userId) {
   return withRetry(async () => {
     const loans = await db('loans').where({ borrower_user_id: userId });
-    
+
     const totalLoans = loans.length;
     const paidLoans = loans.filter(l => l.status === 'paid').length;
     const defaultedLoans = loans.filter(l => l.status === 'defaulted').length;
