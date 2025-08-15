@@ -44,7 +44,7 @@ At any point, you can choose to **[This is my stop]** to cash out your winnings 
 *   **1 Stop:** Win your wager back.
 *   **2 Stops:** Win 2x your wager.
 *   **3 Stops:** Win 4x your wager.
-*   **End of the Line:** Win 9x your wager!
+*   **End of the Line:** Win 100x your wager!
 
 Good luck, and enjoy the ride!
 `;
