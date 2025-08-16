@@ -19,6 +19,10 @@ module.exports = {
     pool: {
       min: 2,
       max: 10,
+      acquireTimeoutMillis: 2000,      // Must be < 3s for Discord
+      createTimeoutMillis: 2000,       // Fast connection creation
+      idleTimeoutMillis: 30000,        // Shorter idle timeout (30s)
+      reapIntervalMillis: 5000,        // More aggressive cleanup
       afterCreate: (conn, done) => {
         console.log('[Knex Pool] Connection created.');
         conn.on('error', err => {
@@ -76,13 +80,13 @@ module.exports = {
       },
     },
     pool: {
-      min: 1,
+      min: 2,                          // Keep more connections warm
       max: 10,
-      acquireTimeoutMillis: 60000,     // Increased to 60s
-      idleTimeoutMillis: 300000,      // Increased to 5 minutes
-      reapIntervalMillis: 10000,      // Check every 10s instead of 1s
+      acquireTimeoutMillis: 2000,      // Must be < 3s for Discord
+      createTimeoutMillis: 2000,       // Fast connection creation
+      idleTimeoutMillis: 30000,        // Shorter idle timeout (30s)
+      reapIntervalMillis: 5000,        // More aggressive cleanup
       propagateCreateError: false,
-      createTimeoutMillis: 30000,     // Add connection creation timeout
       destroyTimeoutMillis: 5000,
       afterCreate: (conn, done) => {
         console.log('[Knex Pool] Connection created.');
@@ -93,20 +97,16 @@ module.exports = {
       },
       validate: (conn) => {
         return new Promise((resolve, reject) => {
-          // Set a timeout for validation query
+          // Faster validation with 1s timeout
           const timeout = setTimeout(() => {
             reject(new Error('Connection validation timeout'));
-          }, 5000);
+          }, 1000);
 
-          conn.query('SELECT 1 as ping', (err, result) => {
+          conn.query('SELECT 1', (err, result) => {
             clearTimeout(timeout);
             if (err) {
               console.error('[Knex Pool] Connection validation failed:', err);
               return reject(err);
-            }
-            // Additional check to ensure the connection is truly working
-            if (!result || !result.rows || result.rows.length === 0) {
-              return reject(new Error('Invalid validation response'));
             }
             resolve();
           });

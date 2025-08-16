@@ -382,7 +382,7 @@ async function endGame(gameId, client) {
             for (const player of cashedOut) {
                 const winnings = game.wager * Payouts[player.stops_rode];
                 console.log(`[Game ${gameId}] Transfer/granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
-                await transfer(client.user.id, player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
+                await transferThenGrant(client.user.id, player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
                 summary += `<@${player.user_id}> got off with **${winnings} GC**.\n`;
             }
             summary += '\n';
