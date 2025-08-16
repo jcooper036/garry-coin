@@ -1043,8 +1043,8 @@ async function createLoan(borrowerId, lenderId, amount, interestRate) {
       dueDate
     });
 
-    // Update credit score for borrower after taking out loan
-    await calculateCreditScore(borrowerId);
+    // Note: Credit score updates moved to async to prevent Discord timeouts
+    // Credit scores will be calculated on-demand for now
 
     return { success: true, loan: loan };
   }));
@@ -1156,8 +1156,8 @@ async function payLoan(loanId, customAmountDue = null) {
       status: loanStatus
     });
 
-    // Update credit score for borrower after loan payment
-    await calculateCreditScore(loan.borrower_user_id);
+    // Note: Credit score updates moved to async to prevent Discord timeouts
+    // Credit scores will be calculated on-demand for now
 
     return {
       success: true,
