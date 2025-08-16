@@ -754,6 +754,188 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
       }
     }
 
+    // --- Loan Repayment Button Handling ---
+    if (custom_id.startsWith('repay_')) {
+      const parts = custom_id.split('_');
+      const action = parts[1];
+      
+      if (action === 'cancel') {
+        return res.send({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            content: '❌ **Loan Repayment Cancelled**\n\nYou have cancelled the loan repayment.',
+            components: [],
+          },
+        });
+      }
+      
+      if (action === 'select') {
+        const [_, __, loanId, userId] = parts;
+        
+        // Verify the user clicking the button is the borrower
+        if (playerId !== userId) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: "❌ This loan repayment is not for you.",
+              flags: InteractionResponseFlags.EPHEMERAL,
+            },
+          });
+        }
+
+        // Show confirmation for specific loan
+        res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+
+        try {
+          const { getActiveLoan, calculateCurrentAmountDue } = require('./db');
+          
+          const loan = await getActiveLoan(parseInt(loanId));
+          if (!loan || loan.borrower_user_id !== userId) {
+            throw new Error('Loan not found or not accessible.');
+          }
+
+          const amountDue = calculateCurrentAmountDue(loan);
+          const now = new Date();
+          const hoursElapsed = (now - new Date(loan.created_at)) / (1000 * 60 * 60);
+          const isEarlyRepayment = hoursElapsed < 24;
+
+          let repaymentType = '';
+          if (isEarlyRepayment) {
+            const dailyInterest = loan.amount * (loan.interest_rate / 100);
+            const penalty = Math.ceil(dailyInterest * 0.25);
+            repaymentType = `⚡ **Early Repayment** (${hoursElapsed.toFixed(1)}h old)\n📋 Penalty: ${penalty} GC (25% of daily interest)\n`;
+          }
+
+          const lenderName = loan.lender_user_id === client.user.id ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
+
+          const confirmationMessage = `💸 **Loan Repayment Confirmation**\n\n` +
+            `🏦 **Loan #${loan.id}** from ${lenderName}\n` +
+            `💰 Principal: ${loan.amount} GC\n` +
+            `📊 Interest Rate: ${loan.interest_rate}%/day\n` +
+            `${repaymentType}` +
+            `💵 **Total Amount Due: ${amountDue} GC**\n\n` +
+            `Are you sure you want to repay this loan?`;
+
+          const row = new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(`repay_confirm_${loan.id}_${userId}`)
+                .setLabel(`💸 Pay ${amountDue} GC`)
+                .setStyle(ButtonStyle.Success),
+              new ButtonBuilder()
+                .setCustomId(`repay_cancel_${userId}`)
+                .setLabel('❌ Cancel')
+                .setStyle(ButtonStyle.Secondary)
+            );
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: confirmationMessage,
+              components: [row]
+            }),
+          });
+        } catch (error) {
+          structuredLog.loan('Error in repay_select handler', {
+            userId: playerId,
+            loanId: parts[2],
+            error: error.message
+          });
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: '❌ An error occurred while processing your repayment request. Please try again later.',
+              components: []
+            }),
+          });
+        }
+        return;
+      }
+      
+      if (action === 'confirm') {
+        const [_, __, loanId, userId] = parts;
+        
+        // Verify the user clicking the button is the borrower
+        if (playerId !== userId) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: "❌ This loan repayment is not for you.",
+              flags: InteractionResponseFlags.EPHEMERAL,
+            },
+          });
+        }
+
+        // Process the loan repayment
+        res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+
+        try {
+          const { getActiveLoan, calculateCurrentAmountDue, getUser, transfer } = require('./db');
+          
+          const loan = await getActiveLoan(parseInt(loanId));
+          if (!loan || loan.borrower_user_id !== userId) {
+            throw new Error('Loan not found or not accessible.');
+          }
+
+          const amountDue = calculateCurrentAmountDue(loan);
+          const borrower = await getUser(userId);
+          
+          if (borrower.balance < amountDue) {
+            throw new Error(`Insufficient funds. You need ${amountDue} GC but only have ${borrower.balance} GC.`);
+          }
+
+          // Process the repayment
+          const { payLoan } = require('./db');
+          const paymentResult = await payLoan(parseInt(loanId), amountDue);
+          
+          if (!paymentResult.success) {
+            throw new Error(paymentResult.message || 'Repayment failed.');
+          }
+
+          const lenderName = loan.lender_user_id === client.user.id ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
+          const now = new Date();
+          const hoursElapsed = (now - new Date(loan.created_at)) / (1000 * 60 * 60);
+          const isEarlyRepayment = hoursElapsed < 24;
+          const repaymentTypeText = isEarlyRepayment ? ' (Early Repayment)' : '';
+
+          const successMessage = `✅ **Loan Repaid Successfully**${repaymentTypeText}\n\n` +
+            `🏦 **Loan #${loan.id}** from ${lenderName}\n` +
+            `💰 Amount Paid: ${amountDue} GC\n` +
+            `📊 Principal: ${loan.amount} GC\n` +
+            `⏰ Loan Duration: ${hoursElapsed.toFixed(1)} hours\n\n` +
+            `Your loan has been marked as paid and the funds have been transferred to the lender.`;
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: successMessage,
+              components: []
+            }),
+          });
+        } catch (error) {
+          structuredLog.loan('Error in repay_confirm handler', {
+            userId: playerId,
+            loanId: parts[2],
+            error: error.message
+          });
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: `❌ **Repayment Failed**\n\n${error.message}`,
+              components: []
+            }),
+          });
+        }
+        return;
+      }
+    }
+
     // --- Ride the Bus Button Handling ---
     if (custom_id.startsWith('wl_')) {
       const parts = custom_id.split('_');

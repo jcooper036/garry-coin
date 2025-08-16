@@ -48,7 +48,7 @@ Only add or remove issues/features from TODO.md. Do not modify the existing inst
 ### What I did wrong
 Made assumptions about the cause of an error (e.g., Docker not running) without sufficient evidence.
 ### What to do instead
-Always verify assumptions with concrete evidence (e.g., by checking logs, file contents, or running commands) before making statements or taking action. Use `docker ps` to check on the running containers. Remember that we are using nodemon, so we are getting hot reloading of containers after changes to /src.
+Always verify assumptions with concrete evidence (e.g., by checking logs, file contents, or running commands) before making statements or taking action. Use `docker ps` to check on the running containers. Remember that we are using nodemon, so we are getting hot reloading of containers after changes to /src. The user typically keeps containers running most of the time, so check first before suggesting to start them.
 
 ## Confidently wrong about code existence
 ### What I did wrong
@@ -136,11 +136,12 @@ Enhanced security and financial controls:
 - **Wealth Commands**: `/garryfatcats` leaderboard with medal emojis and balance-tier displays  
 - **Money Glitch Fix**: Fixed RTB infinite money exploit, implemented proper `transferThenGrant` function
 
-### 2025-08-16: Infrastructure Optimization & Bug Fixes
-Major performance optimizations and critical fixes:
+### 2025-08-16: Infrastructure Optimization & Early Loan Repayment
+Major performance optimizations and new loan features:
 - **transferThenGrant Bug**: Fixed nested transaction issues causing silent RTB payout failures
 - **Connection Pool Optimization**: Solved Discord 3-second timeout issues with proactive connection management
 - **Health Monitoring**: Added `/health` endpoint with real-time pool metrics and database response tracking
+- **Early Loan Repayment**: Implemented `/garryrepayloan` command with 25% penalty for loans < 24 hours, real-time compound interest calculation using Math.ceil(), interactive loan selection UI with Discord buttons
 
 ## Dev Topics
 

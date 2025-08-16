@@ -508,6 +508,7 @@ module.exports = {
   checkDailyLoanLimit,
   getLoanHistory,
   updateCreditScore,
+  calculateCurrentAmountDue,
 };
 
 // --- Ride the Bus Functions
@@ -1033,7 +1034,7 @@ async function getAllActiveLoans() {
   return withRetry(() => db('loans').where({ status: 'active' }));
 }
 
-async function payLoan(loanId) {
+async function payLoan(loanId, customAmountDue = null) {
   return withRetry(() => db.transaction(async trx => {
     const loan = await trx('loans').where({ id: loanId }).first();
     if (!loan || loan.status !== 'active') {
@@ -1045,14 +1046,21 @@ async function payLoan(loanId) {
       return { success: false, message: 'borrower_not_found' };
     }
 
-    // Calculate total amount due with daily compounding interest
-    const loanStartDate = new Date(loan.created_at);
-    const currentDate = new Date();
-    const actualDaysElapsed = (currentDate - loanStartDate) / (1000 * 60 * 60 * 24);
+    // Use custom amount if provided (for early repayment), otherwise calculate normally
+    let totalDue;
+    if (customAmountDue !== null) {
+      totalDue = customAmountDue;
+    } else {
+      // Calculate total amount due with daily compounding interest
+      const loanStartDate = new Date(loan.created_at);
+      const currentDate = new Date();
+      const actualDaysElapsed = (currentDate - loanStartDate) / (1000 * 60 * 60 * 24);
+      
+      // Use daily compounding: A = P(1 + r)^t
+      const dailyInterestRate = loan.interest_rate / 100; // Convert percentage to decimal
+      totalDue = Math.ceil(loan.amount * Math.pow(1 + dailyInterestRate, actualDaysElapsed));
+    }
     
-    // Use daily compounding: A = P(1 + r)^t
-    const dailyInterestRate = loan.interest_rate / 100; // Convert percentage to decimal
-    const totalDue = Math.floor(loan.amount * Math.pow(1 + dailyInterestRate, actualDaysElapsed));
     const interestAmount = totalDue - loan.amount;
 
     let wentIntoDebt = false;
@@ -1189,4 +1197,22 @@ async function getLoanHistory(userId) {
 
 async function updateCreditScore(userId) {
   return calculateCreditScore(userId);
+}
+
+function calculateCurrentAmountDue(loan) {
+  const now = new Date();
+  const hoursElapsed = (now - new Date(loan.created_at)) / (1000 * 60 * 60);
+  const isEarlyRepayment = hoursElapsed < 24;
+  
+  if (isEarlyRepayment) {
+    // Early repayment: principal + 25% of one day's interest
+    const dailyInterest = loan.amount * (loan.interest_rate / 100);
+    const earlyRepaymentPenalty = dailyInterest * 0.25;
+    return Math.ceil(loan.amount + earlyRepaymentPenalty);
+  }
+  
+  // Normal compound interest calculation
+  const daysElapsed = hoursElapsed / 24;
+  const dailyRate = loan.interest_rate / 100;
+  return Math.ceil(loan.amount * Math.pow(1 + dailyRate, daysElapsed));
 }

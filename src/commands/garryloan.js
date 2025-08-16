@@ -102,7 +102,7 @@ module.exports = {
       const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 3; // 5 minutes in dev, 3 days in prod
       
       // Compound interest formula: A = P(1 + r)^t
-      const totalDue = Math.floor(amount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
+      const totalDue = Math.ceil(amount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
       const interestAmount = totalDue - amount;
       const dueDate = new Date();
       const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
