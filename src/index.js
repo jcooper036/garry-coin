@@ -515,24 +515,47 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
             return 'No Score';
           };
 
-          const getCreditFactorsExplanation = (user, gamblingStats, loanHistory) => {
+          const getCreditFactorsExplanation = (user, gamblingStats, loanHistory, activeLoans) => {
             const factors = [];
-            const balancePoints = Math.min((Math.max(user.balance, 0) / 100) * 10, 100);
-            factors.push(`💰 **Balance Factor (40%):** ${balancePoints.toFixed(0)}/100 points`);
-
+            const balancePoints = Math.min((Math.max(user.balance, 0) / 100), 100);
+            factors.push(`💰 **Balance Factor (30%):** ${balancePoints.toFixed(0)}/100 points`);
+            
             const winRate = gamblingStats.overall.winRate || 0;
-            const winRatePoints = winRate * 3;
-            factors.push(`🎲 **Gambling Performance (30%):** ${winRatePoints.toFixed(0)}/300 points`);
-
+            const winRatePoints = winRate * 2.5;
+            factors.push(`🎲 **Gambling Performance (25%):** ${winRatePoints.toFixed(0)}/250 points`);
+            
             let loanHistoryPoints = 100;
             if (loanHistory.totalLoans > 0) {
               const debtEventRate = loanHistory.debtEvents / loanHistory.totalLoans;
-              if (debtEventRate === 0) loanHistoryPoints = 150;
+              if (debtEventRate === 0) loanHistoryPoints = 125;
               else if (debtEventRate <= 0.2) loanHistoryPoints = 75;
               else loanHistoryPoints = 25;
             }
-            factors.push(`📋 **Loan History (30%):** ${loanHistoryPoints}/150 points`);
-
+            factors.push(`📋 **Loan History (25%):** ${loanHistoryPoints}/125 points`);
+            
+            // Active Loan Burden Factor
+            let activeLoanPenalty = 0;
+            if (activeLoans.length > 0) {
+              activeLoanPenalty += activeLoans.length * 5;
+              const now = new Date();
+              const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              const oldLoans = activeLoans.filter(loan => new Date(loan.created_at) < sevenDaysAgo);
+              activeLoanPenalty += oldLoans.length * 15;
+            }
+            factors.push(`🏦 **Active Loan Burden (10%):** -${activeLoanPenalty} points (${activeLoans.length} loans${activeLoanPenalty > activeLoans.length * 5 ? `, ${(activeLoanPenalty - activeLoans.length * 5) / 15} old` : ''})`); 
+            
+            // Active Debt Ratio Factor
+            let debtRatioPenalty = 0;
+            if (activeLoans.length > 0) {
+              const totalActiveDebt = activeLoans.reduce((sum, loan) => sum + loan.amount, 0);
+              const debtRatio = user.balance > 0 ? totalActiveDebt / user.balance : 2;
+              
+              if (debtRatio > 1) debtRatioPenalty = 50;
+              else if (debtRatio > 0.5) debtRatioPenalty = 25;
+              else if (debtRatio > 0.25) debtRatioPenalty = 10;
+            }
+            factors.push(`📊 **Debt Ratio Penalty (10%):** -${debtRatioPenalty} points`);
+            
             return factors.join('\n');
           };
 
@@ -580,7 +603,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           report += `📈 **LOAN HISTORY SUMMARY**\n**Total Loans:** ${loanHistory.totalLoans}\n**Paid in Full:** ${loanHistory.paidLoans}\n**Defaults:** ${loanHistory.defaultedLoans}\n**On-Time Payments:** ${loanHistory.onTimePayments}\n**Debt Events:** ${loanHistory.debtEvents}\n\n`;
 
           if (isOwnReport) {
-            report += `🔍 **CREDIT SCORE BREAKDOWN**\n${getCreditFactorsExplanation(user, gamblingStats, loanHistory)}\n\n💡 **TIPS TO IMPROVE CREDIT**\n`;
+            report += `🔍 **CREDIT SCORE BREAKDOWN**\n${getCreditFactorsExplanation(user, gamblingStats, loanHistory, activeLoans)}\n\n💡 **TIPS TO IMPROVE CREDIT**\n`;
             if (user.balance < 100) report += `• Maintain a higher GarryCoin balance\n`;
             if (gamblingStats.overall.winRate < 50 && gamblingStats.overall.gamesPlayed > 10) report += `• Improve gambling strategy or reduce risky bets\n`;
             if (loanHistory.debtEvents > 0) report += `• Make timely loan payments to avoid debt events\n`;

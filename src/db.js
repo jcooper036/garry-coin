@@ -858,20 +858,24 @@ async function calculateCreditScore(userId) {
 
     const gamblingStats = await getGamblingStats(userId);
     const loanHistory = await getLoanHistory(userId);
+    
+    // Get active loans for penalties
+    const activeLoans = await db('loans').where({ borrower_user_id: userId, status: 'active' });
+    const now = new Date();
 
-    // Balance Factor (40%): (balance / 100) * 10, capped at 100 points
+    // Balance Factor (30%): (balance / 100) * 10, capped at 100 points
     const balanceFactor = Math.min((Math.max(user.balance, 0) / 100), 100);
 
-    // Gambling Win Rate Factor (30%): win_rate * 3 (0-100% = 0-300 points)
+    // Gambling Win Rate Factor (25%): win_rate * 2.5 (0-100% = 0-250 points)
     const winRate = gamblingStats.overall.winRate || 0;
-    const winRateFactor = winRate * 3;
+    const winRateFactor = winRate * 2.5;
 
-    // Loan History Factor (30%)
+    // Loan History Factor (25%)
     let loanHistoryFactor = 100; // Default for no history
     if (loanHistory.totalLoans > 0) {
       const debtEventRate = loanHistory.debtEvents / loanHistory.totalLoans;
       if (debtEventRate === 0) {
-        loanHistoryFactor = 150; // Perfect repayment
+        loanHistoryFactor = 125; // Perfect repayment
       } else if (debtEventRate <= 0.2) {
         loanHistoryFactor = 75; // Some debt events
       } else {
@@ -879,8 +883,35 @@ async function calculateCreditScore(userId) {
       }
     }
 
+    // Active Loan Burden Factor (10%): Penalty for outstanding loans
+    let activeLoanPenalty = 0;
+    if (activeLoans.length > 0) {
+      // Base penalty for having active loans
+      activeLoanPenalty += activeLoans.length * 5; // 5 points per active loan
+      
+      // Age penalty: loans older than 7 days get additional penalty
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const oldLoans = activeLoans.filter(loan => new Date(loan.created_at) < sevenDaysAgo);
+      activeLoanPenalty += oldLoans.length * 15; // 15 additional points for old loans
+    }
+
+    // Active Debt Ratio Factor (10%): Penalty based on debt-to-balance ratio
+    let debtRatioPenalty = 0;
+    if (activeLoans.length > 0) {
+      const totalActiveDebt = activeLoans.reduce((sum, loan) => sum + loan.amount, 0);
+      const debtRatio = user.balance > 0 ? totalActiveDebt / user.balance : 2; // If no balance, assume high ratio
+      
+      if (debtRatio > 1) {
+        debtRatioPenalty = 50; // Severe penalty for debt > balance
+      } else if (debtRatio > 0.5) {
+        debtRatioPenalty = 25; // Moderate penalty for debt > 50% of balance
+      } else if (debtRatio > 0.25) {
+        debtRatioPenalty = 10; // Small penalty for debt > 25% of balance
+      }
+    }
+
     // Calculate final score (300-850 range)
-    const rawScore = balanceFactor + winRateFactor + loanHistoryFactor;
+    const rawScore = balanceFactor + winRateFactor + loanHistoryFactor - activeLoanPenalty - debtRatioPenalty;
     const creditScore = Math.max(300, Math.min(850, Math.floor(rawScore + 300)));
 
     // Update the credit score in the database
@@ -1012,6 +1043,9 @@ async function createLoan(borrowerId, lenderId, amount, interestRate) {
       dueDate
     });
 
+    // Update credit score for borrower after taking out loan
+    await calculateCreditScore(borrowerId);
+
     return { success: true, loan: loan };
   }));
 }
@@ -1121,6 +1155,9 @@ async function payLoan(loanId, customAmountDue = null) {
       wentIntoDebt,
       status: loanStatus
     });
+
+    // Update credit score for borrower after loan payment
+    await calculateCreditScore(loan.borrower_user_id);
 
     return {
       success: true,
