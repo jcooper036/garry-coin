@@ -2,14 +2,14 @@ const { processWordleTransaction } = require('./db');
 const { structuredLog } = require('./logger');
 
 const REWARD_STRUCTURE = {
-    1: 100,
-    2: 10,
-    3: 5,
-    4: 2,
-    5: 1,
-    6: 1,
+    1: 1000,
+    2: 100,
+    3: 50,
+    4: 20,
+    5: 10,
+    6: 10,
 };
-const CHEAT_PENALTY = 4;
+const CHEAT_PENALTY = 40;
 const CHEAT_CHANCE = 0.2;
 
 const CHEATER_EMOJIS = ['<:scumbagcharles:707302898869993523>', '🚔', '🚨', '👮', '⚖️', '<:urfuckendeadkiddo:706647683183411362>', '<:buaGarry:705932743158005771>', '<:megacoop:707305419348901919>', '🙅‍♂️'];
