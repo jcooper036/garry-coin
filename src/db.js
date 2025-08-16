@@ -847,7 +847,7 @@ async function calculateCreditScore(userId) {
     const loanHistory = await getLoanHistory(userId);
 
     // Balance Factor (40%): (balance / 100) * 10, capped at 100 points
-    const balanceFactor = Math.min((Math.max(user.balance, 0) / 100) * 10, 100);
+    const balanceFactor = Math.min((Math.max(user.balance, 0) / 100), 100);
 
     // Gambling Win Rate Factor (30%): win_rate * 3 (0-100% = 0-300 points)
     const winRate = gamblingStats.overall.winRate || 0;
