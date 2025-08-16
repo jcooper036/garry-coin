@@ -155,7 +155,7 @@ module.exports = {
       return {
         content: termsMessage,
         components: [row],
-        ephemeral: true,
+        ephemeral: false,
       };
 
     } catch (error) {
