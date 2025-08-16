@@ -7,6 +7,7 @@ const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGam
 const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const { endWavelengthGame, startWavelengthTimer } = require('./commands/games/wavelength/wavelength_helpers');
 const { structuredLog } = require('./logger');
+const connectionWarmer = require('./connection_warmer');
 const fs = require('fs');
 const path = require('path');
 
@@ -61,6 +62,43 @@ loadCommands(commandsPath);
 
 app.get('/', (req, res) => {
   res.sendStatus(200);
+});
+
+// Health check endpoint with database connection metrics
+app.get('/health', async (req, res) => {
+  try {
+    const startTime = Date.now();
+    
+    // Test database connection
+    await require('./db').db.raw('SELECT 1 as health_check');
+    
+    const dbResponseTime = Date.now() - startTime;
+    const poolMetrics = connectionWarmer.getPoolMetrics();
+    
+    const health = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      database: {
+        responseTime: dbResponseTime,
+        status: dbResponseTime < 1000 ? 'healthy' : 'slow'
+      },
+      connectionPool: {
+        ...poolMetrics,
+        stressed: connectionWarmer.isPoolStressed(),
+        utilization: Math.round((poolMetrics.used / poolMetrics.max) * 100)
+      }
+    };
+    
+    res.json(health);
+  } catch (error) {
+    structuredLog.error('Health check failed', { error: error.message });
+    res.status(500).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      connectionPool: connectionWarmer.getPoolMetrics()
+    });
+  }
 });
 
 app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
@@ -124,6 +162,75 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
     if (commands.has(name)) {
       const command = commands.get(name);
+      
+      // Smart deferral: Check if pool is stressed and this command doesn't already defer
+      const poolStressed = connectionWarmer.isPoolStressed();
+      const poolMetrics = connectionWarmer.getPoolMetrics();
+      
+      if (poolStressed) {
+        structuredLog.warn('Pool stress detected, considering deferral', {
+          command: name,
+          poolMetrics,
+          userId: user.id
+        });
+        
+        // For simple commands that don't already use postProcess, defer them
+        // Complex commands already have their own deferral logic
+        const alreadyDeferred = ['garrymakeitrain', 'garryreservereport', 'garryloan', 'garrycreditreport', 'ridethebus'].includes(name);
+        
+        if (!alreadyDeferred) {
+          structuredLog.info('Auto-deferring command due to pool stress', {
+            command: name,
+            poolMetrics,
+            userId: user.id
+          });
+          
+          // Defer the response
+          res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+          
+          // Execute command and send response via webhook
+          try {
+            const response = await command.execute(req.body, client);
+            
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: response.content,
+                flags: response.ephemeral ? InteractionResponseFlags.EPHEMERAL : undefined
+              }),
+            });
+            
+            structuredLog.info('Auto-deferred command completed successfully', {
+              command: name,
+              userId: user.id
+            });
+          } catch (error) {
+            structuredLog.error('Auto-deferred command failed', {
+              command: name,
+              userId: user.id,
+              error: error.message
+            });
+            
+            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: '❌ Command failed due to database connection issues. Please try again.',
+                flags: InteractionResponseFlags.EPHEMERAL
+              }),
+            });
+          }
+          return;
+        }
+      } else {
+        structuredLog.database('Pool healthy, executing command normally', {
+          command: name,
+          poolMetrics,
+          userId: user.id
+        });
+      }
+      
       const response = await command.execute(req.body, client);
 
       // Special post-processing for Ride the Bus game creation
@@ -1069,4 +1176,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
 app.listen(PORT, () => {
   structuredLog.info('Server started', { port: PORT, category: 'system' });
+  
+  // Start connection warming to prevent stale connection timeouts
+  connectionWarmer.start();
 });

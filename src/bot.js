@@ -5,6 +5,7 @@ const { handleWordleMessage } = require('./wordle_handler');
 const { structuredLog } = require('./logger');
 const { FGREvents } = require('./fgr_events');
 const { LoanScheduler } = require('./loan_scheduler');
+const connectionWarmer = require('./connection_warmer');
 
 const WORDLE_BOT_IDS = (process.env.WORDLE_BOT_IDS || '').split(',');
 
@@ -26,6 +27,9 @@ const GARRYCOIN_EMOJIS = {
 
 client.once('ready', () => {
   structuredLog.bot('Bot logged in', { tag: client.user.tag });
+  
+  // Start connection warming to prevent stale connection timeouts
+  connectionWarmer.start();
   
   // Initialize Federal GarryCoin Reserve events system
   const fgrEvents = new FGREvents(client);
