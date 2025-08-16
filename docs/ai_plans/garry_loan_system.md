@@ -12,7 +12,7 @@ CREATE TABLE loans (
   borrower_user_id VARCHAR(255) NOT NULL,
   lender_user_id VARCHAR(255) NOT NULL,  -- 'garry_bot' for bot loans
   amount INTEGER NOT NULL,
-  interest_rate DECIMAL(5,2) NOT NULL,   -- e.g., 5.50 for 5.5%
+  interest_rate DECIMAL(5,2) NOT NULL,   -- e.g., 5.50 for 5.5% daily compounding rate
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   due_date TIMESTAMP NOT NULL,           -- Environment dependent: 5 minutes (dev) or 3 days (prod)
   status VARCHAR(50) DEFAULT 'active',   -- 'active', 'paid', 'defaulted'
@@ -94,9 +94,9 @@ function botLoanDecision(userId, amount) {
 - Transfer funds immediately upon approval
 
 **Rate Limiting:**
-- One loan per lender per user per day (allows multiple loans from different lenders)
-- Maximum of 10 active loans per user total
-- Users can take 1 loan from GarryCoin Bot and 1 loan from each other user per day
+- **Production**: One loan per lender per user per day (allows multiple loans from different lenders)
+- **Production**: Maximum of 10 active loans per user total
+- **Development**: No loan frequency limitations for easier testing
 - Error messages distinguish between daily limit per lender vs. maximum total loans
 
 ### `/garrycreditreport`
@@ -120,7 +120,7 @@ function botLoanDecision(userId, amount) {
 ### Automated Payment System:
 - **Production**: Scheduled job runs every hour checking for due loans, 3-day loan terms
 - **Development**: Scheduled job runs every 30 seconds, 5-minute loan terms for rapid testing
-- Auto-deduct from borrower account up to loan amount + interest
+- Auto-deduct from borrower account up to loan amount + compound interest (calculated from actual time elapsed)
 - Handle insufficient funds by allowing negative balance (debt)
 - Update loan status and credit history accordingly
 - Send notification messages for successful payments and defaults
@@ -225,8 +225,8 @@ function botLoanDecision(userId, amount) {
 - Error handling with fallback responses
 
 ### Environment Configuration:
-- **Development**: 5-minute loan terms, 30-second payment checks for rapid testing
-- **Production**: 3-day loan terms, 1-hour payment checks for normal operation
+- **Development**: 5-minute loan terms, 30-second payment checks for rapid testing, no loan frequency limits
+- **Production**: 3-day loan terms, 1-hour payment checks for normal operation, full rate limiting enforced
 - Automatic environment detection via NODE_ENV
 
 ### Database Optimizations:
