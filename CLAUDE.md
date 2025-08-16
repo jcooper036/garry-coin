@@ -228,3 +228,94 @@ Comprehensive loan system implementation and critical bug fixes:
 - **Report Improvements**: Added current interest rate display, implemented timeouts (15s LLM, 30s total), shortened LLM prompts for concise responses
 - **Error Handling**: Enhanced webhook response validation, proper timeout management, fallback messages for service failures
 - **Key Lesson**: Discord message limits require careful content management - reports now stay under 1000 characters with truncation safeguards
+
+## Session Summary - August 16, 2025
+
+Major Bug Fixes & Optimizations
+
+1. Fixed Critical RTB Money Glitch in transferThenGrant
+
+Problem: RTB winnings weren't being paid out when the bot had insufficient funds. The transferThenGrant function was calling
+nested transfer() functions within transactions, causing silent failures.
+
+Root Cause:
+- Nested transaction calls that failed silently
+- RTB cash-outs used transfer instead of transferThenGrant
+- No error handling for failed transfers
+
+Fix:
+- Rewrote transferThenGrant to handle all operations within a single transaction
+- Updated RTB cash-out logic to use transferThenGrant consistently
+- Proper money flow: transfers what bot has, grants remainder with logging
+
+Testing: Confirmed with test script - correctly transfers 40 GC and grants 160 GC when requesting 200 GC with insufficient
+bot funds.
+
+2. Solved Discord 3-Second Timeout Issues with Connection Pool Optimizations
+
+Problem: Commands timing out on first use after connection staleness, not due to operation complexity but database
+connection acquisition delays.
+
+Analysis: This was a connection pool problem, not a need for universal deferred responses.
+
+Solutions Implemented:
+
+A. Optimized Pool Configuration
+
+- Set acquisition/creation timeouts to 2 seconds (< Discord's 3s limit)
+- Shortened idle timeouts to 30 seconds with 5s cleanup intervals
+- Increased minimum connections to 2 for connection warming
+- Simplified validation queries with 1s timeouts
+
+B. Connection Warming System
+
+- Automatic SELECT 1 queries every 20 seconds on both services
+- Prevents stale connections before they become problematic
+- Minimal database impact (2 queries every 20s total)
+- Full pool state monitoring and logging
+
+C. Smart Deferral Logic
+
+- Monitors pool stress (pending acquisitions, free connections)
+- Auto-defers simple commands only when pool is stressed
+- Preserves UX for fast operations while protecting against timeouts
+- Complex commands keep existing deferral patterns
+
+D. Health Monitoring
+
+- New /health endpoint with real-time pool metrics
+- Database response time tracking and utilization percentages
+- Pool stress indicators and connection state visibility
+
+Results: Logs show healthy pools with 0 pending acquisitions and 2-63ms response times. Connection warming maintains warm
+connections preventing timeout issues.
+
+Inventory Analysis
+
+Deferred vs Immediate Response Commands
+
+Commands Using Deferred Responses (5):
+- garrymakeitrain - Bulk transfers to many users
+- garryreservereport - LLM API calls (15-30s)
+- garryloan - Complex loan processing
+- garrycreditreport - Detailed gambling analysis
+- ridethebus - Game state creation with timers
+
+Commands Using Immediate Responses (18+):
+- Simple operations: garrywallet, garrysend, garryfatcats
+- Quick queries: garryhistory, garryreceipt, garrygamblingstats
+- Interactive setup: heist, wavelength (buttons return immediately)
+
+Pattern: Deferred responses strategically used for operations >3 seconds, immediate responses for better UX on simple
+operations.
+
+Session Impact
+
+- Fixed silent money glitch that prevented RTB winnings payouts
+- Eliminated first-use timeout issues with proactive connection management
+- Enhanced monitoring capabilities for production debugging
+- Preserved optimal UX by avoiding universal deferral while solving root cause
+- Added robust health checking for infrastructure monitoring
+
+The optimizations address infrastructure stability while maintaining the responsive user experience for simple commands that
+users expect to be instant.
