@@ -142,6 +142,7 @@ Major performance optimizations and new loan features:
 - **Connection Pool Optimization**: Solved Discord 3-second timeout issues with proactive connection management
 - **Health Monitoring**: Added `/health` endpoint with real-time pool metrics and database response tracking
 - **Early Loan Repayment**: Implemented `/garryrepayloan` command with 25% penalty for loans < 24 hours, real-time compound interest calculation using Math.ceil(), interactive loan selection UI with Discord buttons
+- **Credit Score Anti-Abuse**: Enhanced credit scoring to prevent loan hoarding with active loan burden penalties (5 pts/loan + 15 pts for loans >7 days), debt ratio penalties (10-50 pts), and automatic score updates on loan creation/payment
 
 ## Dev Topics
 
