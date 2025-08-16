@@ -278,6 +278,18 @@ const commands = [
     ],
   },
   {
+    name: 'garryrepayloan',
+    description: 'Repay an active loan early or view your active loans.',
+    options: [
+      {
+        name: 'loan_id',
+        description: 'The ID of the specific loan to repay (optional).',
+        type: 4, // INTEGER type
+        required: false,
+      },
+    ],
+  },
+  {
     name: 'garryfatcats',
     description: 'Shows the users with the highest balances.',
     options: [
