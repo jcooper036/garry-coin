@@ -8,19 +8,16 @@
 - Always run `find . -name "node_modules" -prune -o -name ".git" -prune -o -print` to get a sense of the project structure. 
 - Always read @DESIGN.md for technical guidance.
 - Keep these documents up to date for major project decisions and technical decisions.
-- If asked to dump your memory, condense the memory of the current coversation and add the summary to CLAUDE.md, with the section header as the date and time, following the example there.
-
-# sacred - do not alter these files unless explicitly instructed to do so (you may read them though)
-- docker-compose.yml
 
 # saving session info
-If asked, you should modify this file (CLAUDE.md) under the `# Memory`. 
+If asked to save the current session, you should modify this file (CLAUDE.md) under the `# Memory`. 
 - Focus on architectural decisions, major features, and complex debugging with lessons learned
 - Combine related sessions that happened close together on similar topics
 - Include specific technical details for future reference (function names, file paths, key concepts)
 - Emphasize "why" decisions were made and what problems they solved
 - Keep entries detailed enough to understand context but concise enough to scan quickly
-- Target 8-12 lines per major session, grouping minor sessions together
+- Target 6-8 lines per major session, grouping minor sessions together
+- under ## Dev Topics, consider if you need to make any updates, or if you need to add a new topic to cover what was worked on
 
 # planning
 Planning should be done as a synthesis with the user. To prevent you or the user from cheating
@@ -77,245 +74,114 @@ When troubleshooting mysterious failures, timeouts, or hanging processes, always
 
 # Memory
 
-## 2025-08-15 Session Summary (/garryquerylanguage Command & SQL Ban System Implementation)
+## Session Timeline
 
-Implemented comprehensive SQL query interface with advanced security and punishment system:
-- **Core Feature**: Created `/garryquerylanguage` command allowing read-only SQL queries against database with optional public results
-- **Security Validation**: Multi-layer protection including SELECT-only enforcement, forbidden keyword detection using word boundaries, dangerous function blocking, query timeouts (30s), and result limits (100 rows)
-- **SQL Ban System**: Complete punishment framework with `sql_ban_events` table tracking violations, exponential ban escalation (2^n minutes), matching fine amounts transferred to bot, and public shaming messages
-- **Smart Word Boundaries**: Fixed validation to allow legitimate column names like `created_at` while blocking actual SQL keywords like `CREATE TABLE`
-- **Database Architecture**: Read-only connection configuration, detailed violation categorization (forbidden_keyword, dangerous_function, invalid_statement_type), comprehensive audit logging with full query storage
-- **Progressive Penalties**: 1st violation = 2min + 2GC fine, 2nd = 4min + 4GC, escalating exponentially to deter repeated attempts
-- **Public Accountability**: Violations trigger public Discord messages showing user, violation type, query attempt, and penalty details for community awareness
-- **Integration**: Seamlessly integrated with existing transfer system, structured logging, and Discord.js interaction patterns
-
-Critical Security Insight: Word boundary validation (`\b${keyword}\b`) essential for blocking actual SQL keywords while preserving legitimate database column names containing those substrings.
-
-## 2025-08-15 Session Summary (/garryfatcats Command Implementation)
-
-Quick implementation of new wealth leaderboard command:
-- **New Command**: Created `/garryfatcats` showing users with highest balances, defaults to top 5
-- **Optional Parameter**: Added `count` parameter for flexible display (1-N users), with positive number validation  
-- **Smart Display**: Medal emojis for top 3, balance-tier emojis (💎💰🟡🪙), automatic adjustment when fewer users exist than requested
-- **Database Function**: Added `getTopUsersByBalance(limit)` with proper ordering by balance DESC
-- **Command Registration**: Updated command_definitions.js with INTEGER type parameter, proper descriptions
-
-## 2025-08-15 Session Summary (Ride the Bus Money Glitch Fix & transferThenGrant Implementation)
-
-Fixed critical infinite money exploit in Ride the Bus game and implemented proper money flow controls:
-- **Security Issue Identified**: RTB game was creating money from thin air using `grant()` function for all winnings, while only collecting wagers from players via `transfer()` to bot
-- **Money Glitch Analysis**: Players paid wagers to bot, but winners received payouts created from nothing, enabling infinite money generation through large bets
-- **New Function**: Implemented `transferThenGrant(senderId, receiverId, amount, transaction_type)` function that first attempts transfer from sender, then grants remainder if insufficient funds
-- **Smart Money Flow**: Bot pays winnings from collected wagers first, only creates new money when bot balance is insufficient (with structured logging for monitoring)
-- **RTB Integration**: Updated `ridethebus_helpers.js` to use `transferThenGrant` instead of `grant` for end-of-line and cash-out winnings (lines 375, 385)
-- **Database Changes**: Added `transferThenGrant` to exports, imported in RTB helpers, maintains same interface as `transfer()` function
-- **Testing Infrastructure**: Created comprehensive test script `test_transfer_then_grant.js` with multiple scenarios, edge cases, and balance verification
-- **Wordle Migration**: Fixed unrelated duplicate key error by creating migration to remove unique constraint on `wordle_rewards` table
-- **Financial Controls**: System now prevents infinite money creation while maintaining game functionality, with audit trail for any money generation events
-- **Key Architecture**: Preserved existing `transfer()` and `grant()` functions, added hybrid function that intelligently chooses between transfer vs creation based on sender balance
-
-## 2025-08-13 Session Summary (Federal GarryCoin Reserve Implementation & Debugging)
-
-Implemented comprehensive Federal GarryCoin Reserve (FGR) system with AI-driven economic interventions:
-- **Technology Stack**: Gemini API integration for contextual financial content generation, structured logging system
-- **Core Features**: Three autonomous policy tools - Quantitative Easing (targets losing gamblers every 6hrs, 15% chance), Strategic Buybacks (targets profitable players daily, 10% chance), Policy Announcements (pure theater every 12hrs, 20% chance)
-- **LLM Integration**: Generic `llmService` with Gemini 2.5 Flash, contextual prompts using live market data, fallback to "no comments" message
-- **Database Schema**: New tables for FGR events, voting system, policy tracking with full audit trail
-- **Data-Driven Decisions**: Real-time context gathering from gambling stats, transaction history, user activity patterns fed into AI prompts
-- **Commands**: `/garryreservevote` for community input, `/garryreservereport` for economic analysis with live data
-- **Testing Infrastructure**: Complete CLI testing suite with npm scripts, detailed diagnostics for API connectivity
-- **Architecture**: Modular design with `FGRContext` for data aggregation, event-driven system with configurable probabilities
-- **Documentation**: Comprehensive `Economic_Policy.md` explaining all policy tools, triggers, and expected frequencies
-- **Critical Debugging**: Fixed `/garryreservereport` timeout issue by identifying missing GEMINI_API_KEY in docker-compose.yml, added comprehensive logging for post-processing flows
-- **Troubleshooting Lesson**: Environment variable validation crucial for silent service failures - added to corrections section
-
-## 2025-06-30 Session Summary (Initial Setup & Database Integration)
-
-Built Discord bot foundation with Docker Compose architecture. Key decisions:
+### 2025-06-30: Initial Setup & Database Integration
+Built Discord bot foundation with Docker Compose architecture:
 - **Technology Stack**: Node.js with Knex.js for PostgreSQL database interaction (chose over ORMs for direct SQL control)
 - **Infrastructure**: Docker services (api, emoji-bot, db) with automated migrations and health checks
 - **Commands**: Implemented modular command system with global registration, ephemeral responses
-- **Database**: Users table with automatic user creation, transaction tracking system
-- **Development**: Hot-reloading with nodemon, environment-based configuration
 
-## 2025-07-01 Session Summary (Core Transfer System & Game Foundation)
-
+### 2025-07-01: Core Transfer System & Game Foundation
 Implemented comprehensive coin transfer system and first game:
-- **Transfer Logic**: `db.transfer()` with transaction safety, user existence checking, emoji-based transfers via discord.js bot
-- **Transaction Types**: Introduced `transaction_type` column with special sender IDs ('lottery', 'house') for system operations
-- **Architecture**: Split into api service (slash commands) and emoji-bot service (message reactions)
-- **First Game**: Heist game with interactive buttons, win/loss mechanics, bot vs player transfers
-- **Discord Permissions**: Resolved intent requirements (Message Content, Guild Members)
+- **Transfer Logic**: `db.transfer()` with transaction safety, user existence checking, emoji-based transfers
+- **Transaction Types**: Introduced `transaction_type` column with special sender IDs ('lottery', 'house')
+- **First Game**: Heist game with interactive buttons, win/loss mechanics
 
-## 2025-07-02 Session Summary (Production Deployment)
-
-Deployed to Render with CI/CD pipeline:
+### 2025-07-02: Production Deployment
+Deployed to Render (API, bot) with CI/CD pipeline:
 - **Platform Choice**: Render for Docker-native support and GitHub integration over Railway
-- **Production Issues**: Resolved connection errors (DATABASE_URL, SSL certificates), health check endpoints
 - **Service Architecture**: Web service (garrycoin-api) + Background worker (garrycoin-emoji-bot)
-- **Migration Strategy**: Integrated `knex migrate:latest` into startup scripts for Render limitations
-- **Command Fixes**: Resolved guild member fetching issues by passing discord.js client to commands
+- **Migration Strategy**: Integrated `knex migrate:latest` into startup scripts
+- later, near end of July, moved database to Supabase.
 
-## 2025-07-04-05 Session Summary (Feature Expansion & Games)
-
+### 2025-07-04-05: Feature Expansion & Games
 Added major features and improved game system:
-- **GitHub Integration**: `/garrybotrequest` command creating issues via GitHub API, resolved ES Module import issues
+- **GitHub Integration**: `/garrybotrequest` command creating issues via GitHub API
 - **Game Organization**: Created `src/commands/games/` structure, recursive command loading
-- **Heist Enhancements**: User targeting, interactive buttons with proper MESSAGE_COMPONENT handling
-- **Username Display**: Standardized on Discord mentions (`<@USER_ID>`) across all commands for consistency
+- **Username Display**: Standardized on Discord mentions (`<@USER_ID>`) across all commands
 
-## 2025-07-09 Session Summary (Activity Tracking & Dynamic Game Logic)
-
+### 2025-07-09: Activity Tracking & Dynamic Game Logic
 Implemented sophisticated user activity and game mechanics:
 - **Activity Tracking**: Added `last_active_at` to users table, automatic updates on messages/commands
 - **Smart Lottery**: Modified to only select winners from users active within 7 days
 - **Dynamic Heist Success**: Variable success rates based on target inactivity (33%-90% scaling) and wealth ratios
-- **Database Functions**: `getRandomActiveUser`, `getUser` for activity-based game logic
 
-## 2025-07-26 Session Summary (Wordle Integration)
-
+### 2025-07-26: Wordle Integration
 Built comprehensive Wordle rewards system:
 - **Message Parsing**: Automated detection of Wordle bot results with user extraction
 - **Reward Calculation**: Tiered rewards based on solve attempts (1-6 tries), unsolved handling
 - **Anti-Cheat**: Random "GOTCHA" system with penalties for spoofing attempts
-- **Reporting**: Grouped public reports by outcome (winners by tries, unsolved, cheaters)
-- **Database Schema**: New `wordle_rewards` table for idempotency and historical tracking
 
-## 2025-07-28-30 Session Summary (Database Resilience & Connection Management)
-
-Resolved critical production stability issues:
-- **Server Crash Fix**: Moved heist button logic into proper MESSAGE_COMPONENT conditional to prevent crashes
-- **Connection Resilience**: Implemented `withRetry` wrapper for "Connection terminated unexpectedly" errors in long-running game timers
-- **Pool Configuration**: Enhanced Knex connection pooling with proper timeouts and validation for Supabase
-- **Transaction Deadlock Fix**: Refactored `findOrCreateUser` to accept transaction objects, preventing pool exhaustion
-- **Key Lesson**: Always use `trx` object within transaction blocks instead of global `db` to avoid connection deadlocks
-
-## 2025-08-02 Session Summary (Admin Tools & Heist Mechanics)
-
+### 2025-08-02: Admin Tools & Heist Mechanics
 Administrative interface and game balance improvements:
-- **Admin CLI**: Created `src/bot_cli.js` for privileged operations (say, grant, grant-and-announce) avoiding visible admin commands
-- **Heist Formula Refactor**: New dynamic calculation: Base (50%) + Activity Adjustment (-15% for recent activity) + Wealth Adjustment (Robin Hood style)
-- **Transparency**: Full breakdown display of success chance calculations with server-side logging
-- **Game Improvements**: Ensured unique card draws in Ride the Bus
+- **Admin CLI**: Created `src/bot_cli.js` for privileged operations avoiding visible admin commands
+- **Heist Formula Refactor**: New dynamic calculation: Base (50%) + Activity/Wealth Adjustments
 
-## 2025-08-09 Session Summary (Structured Logging & Production Monitoring)
+### 2025-08-13: Federal GarryCoin Reserve & Loan System
+Implemented comprehensive economic intervention systems:
+- **FGR System**: AI-driven economic interventions with Gemini API integration, three autonomous policy tools
+- **Loan System**: Complete implementation with FICO-style credit scoring (300-850), risk-based approval algorithm
+- **Database Schema**: New tables for FGR events, loans, voting system, policy tracking with full audit trail
 
-Infrastructure improvements for production debugging:
-- **Structured Logging**: Implemented winston with category-based JSON logging (DATABASE, HEIST, TRANSFER, etc.)
-- **Production Benefits**: Render log aggregation with filtering capabilities, eliminated noisy Knex pool logs
-- **Enhanced Resilience**: Improved connection validation, increased pool timeouts for Supabase session pooler
-- **Monitoring**: Better observability for debugging connection issues during idle periods
-
-## 2025-08-13 Session Summary (Gambling Statistics & Performance Optimization)
-
-Comprehensive analytics system and Discord timeout fixes:
-- **MakeItRain Fix**: Implemented deferred response pattern to handle Discord's 3-second timeout in large servers
-- **Gambling Statistics**: Built complete analytics system with `getGamblingStats` and `getGamblingLeaderboard` functions
-- **Data Source Strategy**: Uses authoritative game tables (bus_games, wavelength_games) where available, falls back to transactions
-- **Win Rate Bug Fix**: Corrected impossible >100% win rates by distinguishing game instances from transaction counts
+### 2025-08-13: Gambling Statistics & Analytics
+Comprehensive analytics system implementation:
+- **Statistics Engine**: Built complete analytics with `getGamblingStats` and `getGamblingLeaderboard` functions
+- **Data Strategy**: Uses authoritative game tables where available, falls back to transactions
 - **User Features**: `/garrygamblingstats` for personal analysis, `/garrygamblingboard` with profit/volume/winrate leaderboards
-- **Key Insight**: Game statistics must use proper data sources - game tables for instances, transaction tables for amounts
 
-## 2025-08-13 Session Summary (Loan System & FGR Reserve Report Fixes)
+### 2025-08-15: Security Features & Money Controls
+Enhanced security and financial controls:
+- **SQL Interface**: `/garryquerylanguage` command with read-only access, advanced security validation, ban system
+- **Wealth Commands**: `/garryfatcats` leaderboard with medal emojis and balance-tier displays  
+- **Money Glitch Fix**: Fixed RTB infinite money exploit, implemented proper `transferThenGrant` function
 
-Comprehensive loan system implementation and critical bug fixes:
-- **Loan System Architecture**: Complete implementation with `/garryloan` and `/garrycreditreport` commands, FICO-style credit scoring (300-850), risk-based approval algorithm
-- **Database Schema**: New `loans` table with environment-dependent timing (5 min dev, 3 days prod), credit_score column added to users
-- **FGR Integration**: Automatic interest rate adjustments (5%-50%) based on policy stance, loan rates adjust with credit scores
-- **Automated Payments**: LoanScheduler with debt handling, comprehensive notification system, proper transaction management
-- **Testing Infrastructure**: Complete CLI test suite (`npm run test-loan-*`), integration with existing FGR commands
-- **Critical Bug Fix**: Fixed `/garryreservereport` hanging issue caused by message length exceeding Discord's 2000 character limit
-- **Report Improvements**: Added current interest rate display, implemented timeouts (15s LLM, 30s total), shortened LLM prompts for concise responses
-- **Error Handling**: Enhanced webhook response validation, proper timeout management, fallback messages for service failures
-- **Key Lesson**: Discord message limits require careful content management - reports now stay under 1000 characters with truncation safeguards
+### 2025-08-16: Infrastructure Optimization & Bug Fixes
+Major performance optimizations and critical fixes:
+- **transferThenGrant Bug**: Fixed nested transaction issues causing silent RTB payout failures
+- **Connection Pool Optimization**: Solved Discord 3-second timeout issues with proactive connection management
+- **Health Monitoring**: Added `/health` endpoint with real-time pool metrics and database response tracking
 
-## Session Summary - August 16, 2025
+## Dev Topics
 
-Major Bug Fixes & Optimizations
+### Database Architecture & Performance
+**Connection Management Evolution**:
+- **Initial**: Basic Knex setup with default pooling (2025-06-30)
+- **Database Housing**: Moved to Supabase for better free tier (also turns out better features than Render). API and Bot are still hosted by Render
+- **Production Issues**: Enhanced pooling with timeouts and validation for Supabase (2025-07-28)
+- **Resilience**: Implemented `withRetry` wrapper for connection errors, transaction deadlock fixes (2025-07-28)
+- **Optimization**: Connection warming system, smart deferral, 2s timeouts for Discord compatibility (2025-08-16)
 
-1. Fixed Critical RTB Money Glitch in transferThenGrant
+**Key Lessons**: Always use `trx` object within transaction blocks, validate environment variables, monitor pool stress for proactive management.
 
-Problem: RTB winnings weren't being paid out when the bot had insufficient funds. The transferThenGrant function was calling
-nested transfer() functions within transactions, causing silent failures.
+### Financial Security & Money Flow
+**Transfer System Evolution**:
+- **Foundation**: Basic `transfer()` with transaction safety (2025-07-01)
+- **Hybrid Function**: `transferThenGrant()` for smart money flow - transfer first, grant remainder (2025-08-15)
+- **Critical Fix**: Rewrote function to prevent nested transactions causing silent failures (2025-08-16)
 
-Root Cause:
-- Nested transaction calls that failed silently
-- RTB cash-outs used transfer instead of transferThenGrant
-- No error handling for failed transfers
+**Security Controls**: Progressive SQL ban system with exponential penalties, audit trails for money creation, validation using word boundaries (`\b${keyword}\b`).
 
-Fix:
-- Rewrote transferThenGrant to handle all operations within a single transaction
-- Updated RTB cash-out logic to use transferThenGrant consistently
-- Proper money flow: transfers what bot has, grants remainder with logging
+### Discord Integration & Performance  
+**Response Pattern Evolution**:
+- **Basic**: Immediate responses for all commands (2025-06-30)
+- **Deferred Introduction**: Strategic deferral for long operations like `garrymakeitrain` (2025-08-13)
+- **Smart Deferral**: Auto-defer based on pool stress while preserving UX for simple operations (2025-08-16)
 
-Testing: Confirmed with test script - correctly transfers 40 GC and grants 160 GC when requesting 200 GC with insufficient
-bot funds.
+**Timeout Solutions**: Message length limits require content truncation, deferred responses for >3s operations, connection warming prevents first-use delays.
 
-2. Solved Discord 3-Second Timeout Issues with Connection Pool Optimizations
+### Monitoring & Debugging Infrastructure
+**Logging Evolution**:
+- **Basic**: Console logging with pool state information (2025-06-30)
+- **Structured**: Winston with category-based JSON logging (DATABASE, HEIST, TRANSFER, etc.) (2025-08-09)
+- **Production**: Render log aggregation, eliminated noisy Knex logs, comprehensive error tracking (2025-08-09)
+- **Health Monitoring**: Real-time pool metrics, database response tracking, stress indicators (2025-08-16)
 
-Problem: Commands timing out on first use after connection staleness, not due to operation complexity but database
-connection acquisition delays.
+**Testing Infrastructure**: CLI test suites for complex systems (FGR, loans), comprehensive edge case testing for financial functions.
 
-Analysis: This was a connection pool problem, not a need for universal deferred responses.
+### Game Systems & Economics
+**Core Games**: Heist (interactive buttons, dynamic success rates), Ride the Bus (card-based progression), Wavelength (word association), Wordle integration (automated rewards).
 
-Solutions Implemented:
+**Economic Features**: Federal Reserve system with AI-driven interventions, loan system with credit scoring, gambling statistics with proper data sourcing, progressive penalty systems.
 
-A. Optimized Pool Configuration
-
-- Set acquisition/creation timeouts to 2 seconds (< Discord's 3s limit)
-- Shortened idle timeouts to 30 seconds with 5s cleanup intervals
-- Increased minimum connections to 2 for connection warming
-- Simplified validation queries with 1s timeouts
-
-B. Connection Warming System
-
-- Automatic SELECT 1 queries every 20 seconds on both services
-- Prevents stale connections before they become problematic
-- Minimal database impact (2 queries every 20s total)
-- Full pool state monitoring and logging
-
-C. Smart Deferral Logic
-
-- Monitors pool stress (pending acquisitions, free connections)
-- Auto-defers simple commands only when pool is stressed
-- Preserves UX for fast operations while protecting against timeouts
-- Complex commands keep existing deferral patterns
-
-D. Health Monitoring
-
-- New /health endpoint with real-time pool metrics
-- Database response time tracking and utilization percentages
-- Pool stress indicators and connection state visibility
-
-Results: Logs show healthy pools with 0 pending acquisitions and 2-63ms response times. Connection warming maintains warm
-connections preventing timeout issues.
-
-Inventory Analysis
-
-Deferred vs Immediate Response Commands
-
-Commands Using Deferred Responses (5):
-- garrymakeitrain - Bulk transfers to many users
-- garryreservereport - LLM API calls (15-30s)
-- garryloan - Complex loan processing
-- garrycreditreport - Detailed gambling analysis
-- ridethebus - Game state creation with timers
-
-Commands Using Immediate Responses (18+):
-- Simple operations: garrywallet, garrysend, garryfatcats
-- Quick queries: garryhistory, garryreceipt, garrygamblingstats
-- Interactive setup: heist, wavelength (buttons return immediately)
-
-Pattern: Deferred responses strategically used for operations >3 seconds, immediate responses for better UX on simple
-operations.
-
-Session Impact
-
-- Fixed silent money glitch that prevented RTB winnings payouts
-- Eliminated first-use timeout issues with proactive connection management
-- Enhanced monitoring capabilities for production debugging
-- Preserved optimal UX by avoiding universal deferral while solving root cause
-- Added robust health checking for infrastructure monitoring
-
-The optimizations address infrastructure stability while maintaining the responsive user experience for simple commands that
-users expect to be instant.
+**Key Insight**: Game statistics require proper data sources - use game tables for instances, transaction tables for amounts to avoid impossible win rates.
