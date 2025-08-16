@@ -123,26 +123,36 @@ async function transferThenGrant(senderId, receiverId, amount, transaction_type)
   return db.transaction(async trx => {
     const sender = await findOrCreateUser(senderId);
     const receiver = await findOrCreateUser(receiverId);
+    
     if (sender.balance >= amount) {
-      // Transfer the full amount
-      await transfer(senderId, receiverId, amount, transaction_type);
+      // Transfer the full amount directly within transaction
+      await trx('users').where({ user_id: senderId }).decrement('balance', amount);
+      await trx('users').where({ user_id: receiverId }).increment('balance', amount);
+      await recordTransaction(senderId, receiverId, amount, transaction_type, trx);
       return {
-        success: true, message: `Transfer/grant successful (${sender.balance} transferred.`
+        success: true, message: `Transfer/grant successful (${amount} transferred).`
       };
     } else {
       // Send what they do have and grant the rest
+      let transferredAmount = 0;
       if (sender.balance > 0) {
-        await transfer(senderId, receiverId, sender.balance, transaction_type);
+        transferredAmount = sender.balance;
+        await trx('users').where({ user_id: senderId }).decrement('balance', sender.balance);
+        await trx('users').where({ user_id: receiverId }).increment('balance', sender.balance);
+        await recordTransaction(senderId, receiverId, sender.balance, transaction_type, trx);
       }
-      const remainder = amount - sender.balance;
+      
+      const remainder = amount - transferredAmount;
       if (remainder > 0) {
-        await grant(receiverId, remainder, transaction_type, trx);
+        await trx('users').where({ user_id: receiverId }).increment('balance', remainder);
+        const grantSenderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
+        await recordTransaction(grantSenderId, receiverId, remainder, transaction_type, trx);
         structuredLog.warn('Money created via transferThenGrant', {
-          senderId, receiverId, requestedAmount: amount, transferredAmount: sender.balance, grantedAmount: remainder, transactionType: transaction_type
+          senderId, receiverId, requestedAmount: amount, transferredAmount, grantedAmount: remainder, transactionType: transaction_type
         });
       }
       return {
-        success: true, message: `Transfer/grant successful (${sender.balance} transferred, ${remainder} granted).`
+        success: true, message: `Transfer/grant successful (${transferredAmount} transferred, ${remainder} granted).`
       };
     }
   });
