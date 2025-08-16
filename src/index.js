@@ -486,140 +486,6 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
         return;
       }
 
-      // Special post-processing for loan requests
-      if (response.postProcess === 'process_loan') {
-        // Acknowledge the interaction to prevent timeout
-        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
-
-        try {
-          const { userId, amount, lenderId } = response;
-
-          // Import loan helper functions
-          const {
-            findOrCreateUser,
-            getUser,
-            calculateCreditScore,
-            createLoan,
-            getFGRPolicy
-          } = require('./db');
-
-          // Get current base interest rate from FGR or default to 5%
-          const getBaseInterestRate = async () => {
-            try {
-              const policy = await getFGRPolicy('base_interest_rate');
-              return policy ? parseFloat(policy.policy_data.rate || 5.0) : 5.0;
-            } catch (error) {
-              return 5.0;
-            }
-          };
-
-          // Adjust interest rate based on credit score
-          const adjustInterestRateForCredit = (baseRate, creditScore) => {
-            if (creditScore >= 750) return Math.max(0, baseRate - 1);
-            if (creditScore >= 650) return baseRate;
-            if (creditScore >= 550) return baseRate + 1;
-            return baseRate + 2;
-          };
-
-          // Bot loan decision algorithm
-          const calculateBotLoanDecision = (creditScore, amount, botBalance) => {
-            if (amount <= 10) return { approved: true, reason: 'small_loan_auto_approved' };
-            if (amount > botBalance * 0.5) return { approved: false, reason: 'exceeds_bot_capacity' };
-
-            const creditScoreNormalized = (creditScore - 300) / 550;
-            const loanSizeRatio = amount / botBalance;
-            const riskScore = creditScoreNormalized * (1 - loanSizeRatio);
-            const approvalThreshold = 0.3;
-            const finalApprovalChance = Math.max(approvalThreshold, riskScore);
-            const approved = Math.random() < finalApprovalChance;
-
-            return { approved, reason: approved ? 'risk_assessment_approved' : 'risk_assessment_denied' };
-          };
-
-          await findOrCreateUser(userId);
-          const creditScore = await calculateCreditScore(userId);
-          const baseInterestRate = await getBaseInterestRate();
-          const adjustedInterestRate = adjustInterestRateForCredit(baseInterestRate, creditScore);
-
-          let loanApproved = false;
-          let errorMessage = '';
-
-          if (lenderId === 'garry_bot') {
-            const botUser = await getUser(client.user.id);
-            const botBalance = botUser ? botUser.balance : 1000;
-            const decision = calculateBotLoanDecision(creditScore, amount, botBalance);
-            loanApproved = decision.approved;
-
-            if (!loanApproved) {
-              if (decision.reason === 'exceeds_bot_capacity') {
-                errorMessage = `❌ **Loan Application Denied**\n\n**Credit Score:** ${creditScore}\n**Requested Amount:** ${amount} GC\n**Reason:** Loan amount exceeds 50% of bot reserves\n**Max Available:** ${Math.floor(botBalance * 0.5)} GC`;
-              } else {
-                errorMessage = `❌ **Loan Application Denied**\n\n**Credit Score:** ${creditScore}\n**Requested Amount:** ${amount} GC\n**Reason:** Risk assessment indicates high default probability\n**Recommendation:** Build credit through gambling wins or maintain higher balance`;
-              }
-            }
-          } else {
-            const lender = await getUser(lenderId);
-            if (!lender || lender.balance < amount) {
-              errorMessage = `❌ <@${lenderId}> doesn't have enough GarryCoins to fulfill this loan.`;
-            } else {
-              loanApproved = true;
-            }
-          }
-
-          if (!loanApproved) {
-            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content: errorMessage }),
-            });
-            return;
-          }
-
-          const loanResult = await createLoan(userId, lenderId, amount, adjustedInterestRate);
-
-          if (!loanResult.success) {
-            let failMessage = '❌ **Loan Request Failed**\n\n';
-            if (loanResult.message === 'max_active_loans_exceeded') {
-              failMessage += 'You have reached the maximum number of active loans (10).\nPlease wait for some loans to be paid off before requesting new ones.';
-            } else {
-              failMessage += `Error: ${loanResult.message}`;
-            }
-
-            await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content: failMessage }),
-            });
-            return;
-          }
-
-          const interestAmount = Math.floor(amount * (adjustedInterestRate / 100));
-          const totalDue = amount + interestAmount;
-          const dueDate = new Date(loanResult.loan.due_date);
-          const environment = process.env.NODE_ENV || 'development';
-          const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
-
-          const dueDateString = dueDate.toLocaleDateString('en-US', {
-            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
-          });
-
-          const successMessage = `✅ **Loan Approved!**\n\n**Loan ID:** #${loanResult.loan.id}\n**Principal:** ${amount} GC\n**Interest Rate:** ${adjustedInterestRate.toFixed(2)}%\n**Interest Charge:** ${interestAmount} GC\n**Total Due:** ${totalDue} GC\n**Due Date:** ${dueDateString} EST\n**Lender:** ${lenderId === 'garry_bot' ? 'GarryCoin Bot' : `<@${lenderId}>`}\n\n💳 **Your Credit Score:** ${creditScore}\n\nThe loan amount has been deposited into your account. Payment will be automatically deducted in ${repaymentPeriod}.`;
-
-          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: successMessage }),
-          });
-
-        } catch (error) {
-          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: '❌ An error occurred while processing your loan request. Please try again later.' }),
-          });
-        }
-        return;
-      }
 
       // Special post-processing for credit reports
       if (response.postProcess === 'generate_credit_report') {
@@ -634,6 +500,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
             findOrCreateUser,
             getUser,
             calculateCreditScore,
+            calculateDebtToAssetRatio,
             getUserLoans,
             getLoanHistory,
             getGamblingStats
@@ -683,12 +550,14 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
           const creditScore = await calculateCreditScore(targetUserId);
           const creditRating = getCreditRating(creditScore);
+          const debtRatio = await calculateDebtToAssetRatio(targetUserId);
           const activeLoans = await getUserLoans(targetUserId, 'active');
           const loanHistory = await getLoanHistory(targetUserId);
           const gamblingStats = await getGamblingStats(targetUserId);
 
           let report = `📊 **Credit Report${isOwnReport ? '' : ` for <@${targetUserId}>`}**\n\n`;
           report += `🏦 **CREDIT SCORE**\n**Score:** ${creditScore} (${creditRating})\n**Range:** 300-850\n\n`;
+          report += `📈 **DEBT-TO-ASSET RATIO**\n**Ratio:** ${(debtRatio * 100).toFixed(1)}%\n**Risk Level:** ${debtRatio < 0.3 ? 'Low' : debtRatio < 0.7 ? 'Medium' : 'High'}\n\n`;
           report += `💳 **OUTSTANDING LOANS**\n`;
 
           if (activeLoans.length === 0) {
@@ -701,9 +570,9 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
               const dueDateString = dueDate.toLocaleDateString('en-US', {
                 month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
               });
-              const lenderDisplay = loan.lender_user_id === 'garry_bot' ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
+              const lenderDisplay = loan.lender_user_id === client.user.id ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
 
-              report += `**Loan #${loan.id}** - ${loan.amount} GC @ ${loan.interest_rate}%\n   Due: ${dueDateString} EST (${totalDue} GC total)\n   Lender: ${lenderDisplay}\n`;
+              report += `**Loan #${loan.id}** - ${loan.amount} GC @ ${loan.interest_rate}% daily (compounding)\n   Due: ${dueDateString} EST (${totalDue} GC total)\n   Lender: ${lenderDisplay}\n`;
             }
             report += `\n`;
           }
@@ -757,6 +626,133 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
   if (type === InteractionType.MESSAGE_COMPONENT) {
     const { custom_id } = data;
     const playerId = req.body.member.user.id;
+
+    // --- Loan Button Handling ---
+    if (custom_id.startsWith('loan_')) {
+      const parts = custom_id.split('_');
+      const action = parts[1];
+      
+      if (action === 'reject') {
+        return res.send({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            content: '❌ **Loan Rejected**\n\nYou have declined the loan offer.',
+            components: [],
+          },
+        });
+      }
+      
+      if (action === 'accept') {
+        const [_, __, userId, lenderId, amount, interestRate] = parts;
+        
+        // Verify the user clicking the button is the same as the borrower
+        if (playerId !== userId) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: "❌ This loan offer is not for you.",
+              flags: InteractionResponseFlags.EPHEMERAL,
+            },
+          });
+        }
+
+        // Process the actual loan
+        res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+
+        try {
+          const {
+            findOrCreateUser,
+            getUser,
+            calculateCreditScore,
+            calculateRiskBasedInterestRate,
+            createLoan,
+            getFGRPolicy
+          } = require('./db');
+
+          // Re-validate loan eligibility at acceptance time
+          await findOrCreateUser(userId);
+
+          // Check lender still has funds
+          const lender = await getUser(lenderId);
+          if (!lender) {
+            const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
+            throw new Error(`${lenderName} not found in the database.`);
+          }
+
+          const maxLoanAmount = Math.floor(lender.balance * 0.5);
+          const requestedAmount = parseInt(amount);
+          
+          if (requestedAmount > maxLoanAmount) {
+            const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
+            throw new Error(`Loan amount now exceeds 50% of ${lenderName}'s balance. Max available: ${maxLoanAmount} GC`);
+          }
+
+          // Recalculate interest rate with current conditions
+          const getBaseInterestRate = async () => {
+            try {
+              const policy = await getFGRPolicy('base_interest_rate');
+              return policy ? parseFloat(policy.policy_data.rate || 5.0) : 5.0;
+            } catch (error) {
+              return 5.0;
+            }
+          };
+          
+          const baseInterestRate = await getBaseInterestRate();
+          const rateResult = await calculateRiskBasedInterestRate(userId, lenderId, requestedAmount, baseInterestRate);
+          const finalInterestRate = rateResult.rate;
+          const creditScore = rateResult.breakdown.creditScore;
+
+          // Create the loan
+          const loanResult = await createLoan(userId, lenderId, requestedAmount, finalInterestRate);
+
+          if (!loanResult.success) {
+            let failMessage = '❌ **Loan Processing Failed**\n\n';
+            if (loanResult.message === 'max_active_loans_exceeded') {
+              failMessage += 'You have reached the maximum number of active loans (10).\nPlease wait for some loans to be paid off before requesting new ones.';
+            } else {
+              failMessage += `Error: ${loanResult.message}`;
+            }
+            throw new Error(failMessage);
+          }
+
+          // Calculate final loan details with daily compounding
+          const environment = process.env.NODE_ENV || 'development';
+          const dailyInterestRate = finalInterestRate / 100; // Convert percentage to decimal
+          const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 3; // 5 minutes in dev, 3 days in prod
+          
+          // Compound interest formula: A = P(1 + r)^t
+          const totalDue = Math.floor(requestedAmount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
+          const interestAmount = totalDue - requestedAmount;
+          const dueDate = new Date(loanResult.loan.due_date);
+          const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
+
+          const dueDateString = dueDate.toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
+          });
+
+          const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
+
+          const successMessage = `✅ **Loan Approved!**\n\n**Loan ID:** #${loanResult.loan.id}\n**Principal:** ${requestedAmount} GC\n**Daily Interest Rate:** ${finalInterestRate.toFixed(2)}% (compounding)\n**Loan Period:** ${loanPeriodDays.toFixed(4)} days\n**Interest Charge:** ${interestAmount} GC\n**Total Due:** ${totalDue} GC\n**Due Date:** ${dueDateString} EST\n**Lender:** ${lenderName}\n\n💳 **Your Credit Score:** ${creditScore}\n\nThe loan amount has been deposited into your account. Payment will be automatically deducted in ${repaymentPeriod}.`;
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: successMessage, components: [] }),
+          });
+
+        } catch (error) {
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              content: typeof error.message === 'string' ? error.message : '❌ An error occurred while processing your loan. Please try again later.',
+              components: [] 
+            }),
+          });
+        }
+        return;
+      }
+    }
 
     // --- Ride the Bus Button Handling ---
     if (custom_id.startsWith('wl_')) {

@@ -498,6 +498,8 @@ module.exports = {
   getEconomicMetrics,
   // Loan System
   calculateCreditScore,
+  calculateDebtToAssetRatio,
+  calculateRiskBasedInterestRate,
   createLoan,
   getUserLoans,
   getActiveLoan,
@@ -887,6 +889,81 @@ async function calculateCreditScore(userId) {
   });
 }
 
+async function calculateDebtToAssetRatio(userId) {
+  return withRetry(async () => {
+    const user = await db('users').where({ user_id: userId }).first();
+    if (!user) return 0;
+
+    // Get all active loans where user is the borrower (debt)
+    const activeLoansAsBorrower = await db('loans')
+      .where({ borrower_user_id: userId, status: 'active' })
+      .sum('amount as totalDebt')
+      .first();
+
+    const totalDebt = parseInt(activeLoansAsBorrower.totalDebt || 0);
+    const currentBalance = Math.max(user.balance, 0); // Don't count negative balance as assets
+    const totalAssets = currentBalance;
+
+    // If no assets, return maximum risk ratio
+    if (totalAssets === 0) {
+      return totalDebt > 0 ? 1.0 : 0.0;
+    }
+
+    // Calculate debt-to-asset ratio (0.0 = no debt, 1.0 = debt equals assets)
+    const ratio = totalDebt / totalAssets;
+    return Math.min(ratio, 2.0); // Cap at 200% for extreme cases
+  });
+}
+
+async function calculateRiskBasedInterestRate(borrowerId, lenderId, amount, fgrBaseRate) {
+  return withRetry(async () => {
+    // Get debt-to-asset ratios for both parties
+    const lenderDebtRatio = await calculateDebtToAssetRatio(lenderId);
+    const borrowerDebtRatio = await calculateDebtToAssetRatio(borrowerId);
+    
+    // Get lender's balance for loan size calculation
+    const lender = await getUser(lenderId);
+    const lenderBalance = Math.max(lender.balance, 1); // Avoid division by zero
+    const loanSizePercent = amount / lenderBalance;
+    
+    // Get borrower's credit score for modifier
+    const creditScore = await calculateCreditScore(borrowerId);
+    
+    // Calculate risk multipliers
+    const lenderRiskMultiplier = 1 + (lenderDebtRatio * 2); // 1x to 3x (at 100% debt ratio)
+    const borrowerRiskMultiplier = 1 + (borrowerDebtRatio * 1.5); // 1x to 2.5x (at 100% debt ratio)
+    const sizeAddition = loanSizePercent * 100; // Direct percentage addition (1% = +1%, 50% = +50%)
+    
+    // Credit score modifier: high credit (-20%), mid (0%), low (+20%)
+    let creditModifier = 1.0;
+    if (creditScore >= 750) creditModifier = 0.8; // -20%
+    else if (creditScore >= 550) creditModifier = 1.0; // no change
+    else creditModifier = 1.2; // +20%
+    
+    // Calculate final rate
+    let finalRate = (fgrBaseRate * lenderRiskMultiplier * borrowerRiskMultiplier * creditModifier) + sizeAddition;
+    
+    // Cap between 1% and 200%
+    finalRate = Math.max(1, Math.min(200, finalRate));
+    
+    return {
+      rate: finalRate,
+      breakdown: {
+        fgrBaseRate,
+        lenderDebtRatio: lenderDebtRatio.toFixed(3),
+        borrowerDebtRatio: borrowerDebtRatio.toFixed(3),
+        loanSizePercent: loanSizePercent.toFixed(3),
+        creditScore,
+        lenderRiskMultiplier: lenderRiskMultiplier.toFixed(2),
+        borrowerRiskMultiplier: borrowerRiskMultiplier.toFixed(2),
+        sizeAddition: sizeAddition.toFixed(1),
+        creditModifier: creditModifier.toFixed(2),
+        finalRate: finalRate.toFixed(2)
+      }
+    };
+  });
+}
+
 async function createLoan(borrowerId, lenderId, amount, interestRate) {
   return withRetry(() => db.transaction(async trx => {
     // Check if borrower has too many active loans (max 10)
@@ -919,16 +996,10 @@ async function createLoan(borrowerId, lenderId, amount, interestRate) {
       due_date: dueDate
     }).returning('*');
 
-    // Transfer the money from lender to borrower
-    if (lenderId === 'garry_bot') {
-      // Bot loan - use grant function
-      await grant(borrowerId, amount, 'loan_disbursement', trx);
-    } else {
-      // User-to-user loan - use transfer function
-      const transferResult = await transfer(lenderId, borrowerId, amount, 'loan_disbursement');
-      if (!transferResult.success) {
-        throw new Error(`Transfer failed: ${transferResult.message} `);
-      }
+    // Transfer the money from lender to borrower (same logic for all users)
+    const transferResult = await transfer(lenderId, borrowerId, amount, 'loan_disbursement');
+    if (!transferResult.success) {
+      throw new Error(`Transfer failed: ${transferResult.message}`);
     }
 
     structuredLog.loan('Loan created', {
@@ -974,9 +1045,15 @@ async function payLoan(loanId) {
       return { success: false, message: 'borrower_not_found' };
     }
 
-    // Calculate total amount due (principal + interest)
-    const interestAmount = Math.floor(loan.amount * (loan.interest_rate / 100));
-    const totalDue = loan.amount + interestAmount;
+    // Calculate total amount due with daily compounding interest
+    const loanStartDate = new Date(loan.created_at);
+    const currentDate = new Date();
+    const actualDaysElapsed = (currentDate - loanStartDate) / (1000 * 60 * 60 * 24);
+    
+    // Use daily compounding: A = P(1 + r)^t
+    const dailyInterestRate = loan.interest_rate / 100; // Convert percentage to decimal
+    const totalDue = Math.floor(loan.amount * Math.pow(1 + dailyInterestRate, actualDaysElapsed));
+    const interestAmount = totalDue - loan.amount;
 
     let wentIntoDebt = false;
     let actualPayment = Math.min(borrower.balance, totalDue);
@@ -1005,12 +1082,10 @@ async function payLoan(loanId) {
       .where({ user_id: loan.borrower_user_id })
       .decrement('balance', actualPayment);
 
-    // Update lender balance (if not bot)
-    if (loan.lender_user_id !== 'garry_bot') {
-      await trx('users')
-        .where({ user_id: loan.lender_user_id })
-        .increment('balance', actualPayment);
-    }
+    // Update lender balance (same logic for all users)
+    await trx('users')
+      .where({ user_id: loan.lender_user_id })
+      .increment('balance', actualPayment);
 
     // Record the payment transaction
     await trx('transactions').insert({
@@ -1051,6 +1126,14 @@ async function payLoan(loanId) {
 
 async function checkDailyLoanLimit(userId, lenderId) {
   return withRetry(async () => {
+    // In development environment, bypass all loan frequency limitations for easier testing
+    const environment = process.env.NODE_ENV || 'development';
+    if (environment === 'development') {
+      return { blocked: false };
+    }
+
+    // Production environment: enforce all restrictions
+    
     // Check if user has reached maximum of 10 active loans
     const outstandingLoans = await db('loans')
       .where({ borrower_user_id: userId, status: 'active' })
