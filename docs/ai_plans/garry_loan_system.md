@@ -139,7 +139,7 @@ function botLoanDecision(userId, amount) {
 1. Loan comes due after environment-dependent period (5 min dev / 3 days prod)
 2. Automated system attempts payment every 30 seconds (dev) or 1 hour (prod)
 3. If successful: Updates loan status, sends notification via DM or channel
-4. If insufficient funds: User goes into debt (up to -1000 GC limit), affects credit score
+4. If insufficient funds: User goes into debt (up to -1000000 GC limit), affects credit score
 5. Credit report shows updated information with debt events tracked
 6. Sends properly formatted notification about loan resolution
 
@@ -148,7 +148,7 @@ function botLoanDecision(userId, amount) {
 ### Edge Cases:
 - **User deletes account**: Loans remain active with user ID
 - **Bot insufficient funds**: Approval algorithm prevents this scenario
-- **Negative balances**: Allow up to -1000 GC debt limit
+- **Negative balances**: Allow up to -1000000 GC debt limit
 - **Multiple outstanding loans**: Allow up to 10 active loans per user (more than the daily limit but that's fine)
 
 ### Database Integrity:
@@ -162,7 +162,7 @@ function botLoanDecision(userId, amount) {
 - Rate limiting: 1 loan per lender per user per day (prevents spam from single source)
 - Credit score-based risk assessment prevents unlimited borrowing
 - Maximum 10 active loans per user total
-- Debt limit of -1000 GC prevents infinite negative balances
+- Debt limit of -1000000 GC prevents infinite negative balances
 - Comprehensive audit trail in transactions and loans tables
 
 ### Data Privacy:

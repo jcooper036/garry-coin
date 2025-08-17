@@ -904,15 +904,10 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           }
 
           const amountDue = calculateCurrentAmountDue(loan);
-          const borrower = await getUser(userId);
           
-          if (borrower.balance < amountDue) {
-            throw new Error(`Insufficient funds. You need ${amountDue} GC but only have ${borrower.balance} GC.`);
-          }
-
-          // Process the repayment
+          // Process the repayment with FGR bailout support (no need to check funds - FGR guarantees loans)
           const { payLoan } = require('./db');
-          const paymentResult = await payLoan(parseInt(loanId), amountDue);
+          const paymentResult = await payLoan(parseInt(loanId), amountDue, client.user.id);
           
           if (!paymentResult.success) {
             throw new Error(paymentResult.message || 'Repayment failed.');
@@ -924,12 +919,34 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           const isEarlyRepayment = hoursElapsed < 24;
           const repaymentTypeText = isEarlyRepayment ? ' (Early Repayment)' : '';
 
-          const successMessage = `✅ **Loan Repaid Successfully**${repaymentTypeText}\n\n` +
+          let successMessage = `✅ **Loan Repaid Successfully**${repaymentTypeText}\n\n` +
             `🏦 **Loan #${loan.id}** from ${lenderName}\n` +
             `💰 Amount Paid: ${amountDue} GC\n` +
             `📊 Principal: ${loan.amount} GC\n` +
-            `⏰ Loan Duration: ${hoursElapsed.toFixed(1)} hours\n\n` +
-            `Your loan has been marked as paid and the funds have been transferred to the lender.`;
+            `⏰ Loan Duration: ${hoursElapsed.toFixed(1)} hours\n\n`;
+
+          if (paymentResult.fgr_bailout) {
+            const details = paymentResult.bailout_details;
+            successMessage += `🏛️ **Federal GarryCoin Reserve Intervention**\n` +
+              `💸 You paid: ${paymentResult.paid_amount} GC\n` +
+              `🆘 FGR covered: ${details.shortfall} GC\n`;
+            
+            if (details.transferredFromBot > 0) {
+              successMessage += `💰 (${details.transferredFromBot} GC transferred from reserves)\n`;
+            }
+            if (details.grantedAmount > 0) {
+              successMessage += `🖨️ (${details.grantedAmount} GC created by FGR emergency powers)\n`;
+            }
+            
+            successMessage += `\n🎉 **The gracious Federal GarryCoin Reserve has ensured your lender was made whole!**\n` +
+              `Your loan obligation is fulfilled thanks to FGR intervention.`;
+            
+            if (paymentResult.went_into_debt) {
+              successMessage += `\n\n⚠️ Note: This payment pushed you into debt. Work your way back to positive balance!`;
+            }
+          } else {
+            successMessage += `Your loan has been marked as paid and the funds have been transferred to the lender.`;
+          }
 
           await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
             method: 'PATCH',
