@@ -1068,7 +1068,7 @@ async function getAllActiveLoans() {
   return withRetry(() => db('loans').where({ status: 'active' }));
 }
 
-async function payLoan(loanId, customAmountDue = null) {
+async function payLoan(loanId, customAmountDue = null, botUserId = null) {
   return withRetry(() => db.transaction(async trx => {
     const loan = await trx('loans').where({ id: loanId }).first();
     if (!loan || loan.status !== 'active') {
@@ -1097,53 +1097,152 @@ async function payLoan(loanId, customAmountDue = null) {
     
     const interestAmount = totalDue - loan.amount;
 
+    // Step 1: Extract payment from borrower 
+    // With FGR bailout system, borrower only pays what they have (if FGR available)
+    // Without FGR, borrower pays full amount even if it pushes them into debt
+    let borrowerContribution;
     let wentIntoDebt = false;
-    let actualPayment = Math.min(borrower.balance, totalDue);
 
     if (borrower.balance < totalDue) {
-      // User doesn't have enough money - they'll go into debt
       wentIntoDebt = true;
-
-      // Check if this would exceed debt limit (-1000 GC)
-      const newBalance = borrower.balance - totalDue;
-      if (newBalance < -1000) {
-        // Can only pay what doesn't exceed debt limit
-        actualPayment = borrower.balance + 1000;
-        structuredLog.loan('Loan payment limited by debt ceiling', {
-          loanId,
-          borrowerId: loan.borrower_user_id,
-          requestedPayment: totalDue,
-          actualPayment,
-          newBalance: -1000
-        });
+      
+      if (botUserId) {
+        // FGR is available - borrower only pays what they have, FGR covers rest
+        borrowerContribution = Math.max(borrower.balance, 0); // Don't let them go below 0
+      } else {
+        // No FGR - borrower must pay full amount even if it pushes them into debt
+        // Check debt limit (-1000000 GC)
+        const newBalance = borrower.balance - totalDue;
+        if (newBalance < -1000000) {
+          // Can only extract what doesn't exceed debt limit
+          borrowerContribution = borrower.balance + 1000000;
+          structuredLog.loan('Loan payment limited by debt ceiling', {
+            loanId,
+            borrowerId: loan.borrower_user_id,
+            requestedPayment: totalDue,
+            borrowerContribution,
+            newBalance: -1000000
+          });
+        } else {
+          // Extract full amount, putting borrower into debt
+          borrowerContribution = totalDue;
+        }
       }
+    } else {
+      // Borrower has enough to pay in full
+      borrowerContribution = totalDue;
     }
 
-    // Update borrower balance
+    // Update borrower balance (subtract what they pay)
     await trx('users')
       .where({ user_id: loan.borrower_user_id })
-      .decrement('balance', actualPayment);
+      .decrement('balance', borrowerContribution);
 
-    // Update lender balance (same logic for all users)
-    await trx('users')
-      .where({ user_id: loan.lender_user_id })
-      .increment('balance', actualPayment);
+    // Record borrower payment
+    if (borrowerContribution > 0) {
+      await trx('transactions').insert({
+        sending_user_id: loan.borrower_user_id,
+        receiving_user_id: loan.lender_user_id,
+        amount: borrowerContribution,
+        transaction_type: 'loan_payment'
+      });
+    }
 
-    // Record the payment transaction
-    await trx('transactions').insert({
-      sending_user_id: loan.borrower_user_id,
-      receiving_user_id: loan.lender_user_id,
-      amount: actualPayment,
-      transaction_type: 'loan_payment'
-    });
+    // Step 2: FGR covers any shortfall using transferThenGrant logic
+    const shortfall = totalDue - borrowerContribution;
+    let fgrBailout = false;
+    let bailoutDetails = null;
 
-    // Update loan status
-    const loanStatus = actualPayment >= totalDue ? 'paid' : 'defaulted';
+    if (shortfall > 0 && botUserId) {
+      // FGR steps in to cover the difference - implement transferThenGrant logic inline
+      const bot = await trx('users').where({ user_id: botUserId }).first();
+      if (!bot) {
+        // Create bot user if doesn't exist
+        await trx('users').insert({ user_id: botUserId, balance: 0 });
+      }
+
+      let transferredFromBot = 0;
+      let grantedAmount = 0;
+
+      if (bot && bot.balance >= shortfall) {
+        // Bot has enough to cover shortfall
+        transferredFromBot = shortfall;
+        await trx('users').where({ user_id: botUserId }).decrement('balance', shortfall);
+        await trx('users').where({ user_id: loan.lender_user_id }).increment('balance', shortfall);
+        await trx('transactions').insert({
+          sending_user_id: botUserId,
+          receiving_user_id: loan.lender_user_id,
+          amount: shortfall,
+          transaction_type: 'fgr_loan_bailout'
+        });
+      } else {
+        // Bot doesn't have enough - transfer what it has, grant the rest
+        if (bot && bot.balance > 0) {
+          transferredFromBot = bot.balance;
+          await trx('users').where({ user_id: botUserId }).decrement('balance', bot.balance);
+          await trx('users').where({ user_id: loan.lender_user_id }).increment('balance', bot.balance);
+          await trx('transactions').insert({
+            sending_user_id: botUserId,
+            receiving_user_id: loan.lender_user_id,
+            amount: bot.balance,
+            transaction_type: 'fgr_loan_bailout'
+          });
+        }
+
+        grantedAmount = shortfall - transferredFromBot;
+        if (grantedAmount > 0) {
+          await trx('users').where({ user_id: loan.lender_user_id }).increment('balance', grantedAmount);
+          await trx('transactions').insert({
+            sending_user_id: 'fgr',
+            receiving_user_id: loan.lender_user_id,
+            amount: grantedAmount,
+            transaction_type: 'fgr_loan_bailout'
+          });
+        }
+      }
+
+      fgrBailout = true;
+      bailoutDetails = {
+        shortfall,
+        transferredFromBot,
+        grantedAmount
+      };
+
+      // Also give lender the borrower's contribution
+      if (borrowerContribution > 0) {
+        await trx('users')
+          .where({ user_id: loan.lender_user_id })
+          .increment('balance', borrowerContribution);
+      }
+
+      structuredLog.loan('FGR loan bailout executed', {
+        loanId,
+        borrowerId: loan.borrower_user_id,
+        lenderId: loan.lender_user_id,
+        shortfall,
+        bailoutDetails
+      });
+    } else if (shortfall > 0) {
+      // No bot ID provided, lender doesn't get full payment (defaulted loan)
+      await trx('users')
+        .where({ user_id: loan.lender_user_id })
+        .increment('balance', borrowerContribution);
+    } else {
+      // Borrower paid in full, give lender the full payment
+      await trx('users')
+        .where({ user_id: loan.lender_user_id })
+        .increment('balance', borrowerContribution);
+    }
+
+    // Update loan status - with FGR bailout, loans are always considered "paid"
+    const totalPaymentToLender = borrowerContribution + (bailoutDetails?.shortfall || 0);
+    const loanStatus = totalPaymentToLender >= totalDue ? 'paid' : 'defaulted';
+    
     await trx('loans')
       .where({ id: loanId })
       .update({
         status: loanStatus,
-        amount_paid: actualPayment,
+        amount_paid: borrowerContribution, // Only borrower's contribution
         went_into_debt: wentIntoDebt
       });
 
@@ -1151,7 +1250,9 @@ async function payLoan(loanId, customAmountDue = null) {
       loanId,
       borrowerId: loan.borrower_user_id,
       totalDue,
-      actualPayment,
+      borrowerContribution,
+      fgrBailout,
+      bailoutDetails,
       wentIntoDebt,
       status: loanStatus
     });
@@ -1161,10 +1262,12 @@ async function payLoan(loanId, customAmountDue = null) {
 
     return {
       success: true,
-      paid_amount: actualPayment,
+      paid_amount: borrowerContribution,
       total_due: totalDue,
       went_into_debt: wentIntoDebt,
-      status: loanStatus
+      status: loanStatus,
+      fgr_bailout: fgrBailout,
+      bailout_details: bailoutDetails
     };
   }));
 }

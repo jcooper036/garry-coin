@@ -73,6 +73,8 @@ class LoanScheduler {
 
       for (const loan of dueLoans) {
         try {
+          // For scheduled payments, we don't have access to client.user.id, so pass null
+          // This means scheduled payments won't trigger FGR bailouts - only manual repayments will
           const paymentResult = await payLoan(loan.id);
           paymentResults.push({
             loanId: loan.id,
