@@ -4,7 +4,7 @@ exports.up = function(knex) {
     table.string('host_user_id').notNullable();
     table.string('channel_id').notNullable();
     table.string('message_id').notNullable();
-    table.string('status').notNullable().defaultTo('waiting_for_players'); // waiting_for_players, active, finished, cancelled
+    table.string('status').notNullable().defaultTo('waiting_for_players'); // waiting_for_players, active, finished, cancelled, abandoned
     table.string('current_phase'); // color, higher_lower, inside_outside, suit
     table.jsonb('current_cards').defaultTo('[]');
     table.integer('wager').notNullable();

@@ -539,9 +539,26 @@ async function getBusGame(gameId) {
 }
 
 async function getActiveBusGame() {
-  return withRetry(() => db('bus_games')
-    .whereIn('status', ['waiting_for_players', 'active'])
-    .first());
+  return withRetry(async () => {
+    // First, mark any stale games as abandoned (5+ minutes without updates)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const abandonedCount = await db('bus_games')
+      .whereIn('status', ['waiting_for_players', 'active'])
+      .where('updated_at', '<', fiveMinutesAgo)
+      .update({ status: 'abandoned' });
+    
+    if (abandonedCount > 0) {
+      structuredLog.game('Marked stale bus games as abandoned', { 
+        count: abandonedCount,
+        cutoffTime: fiveMinutesAgo.toISOString()
+      });
+    }
+
+    // Then return the first active game (if any)
+    return db('bus_games')
+      .whereIn('status', ['waiting_for_players', 'active'])
+      .first();
+  });
 }
 
 async function updateBusGame(gameId, updates) {
