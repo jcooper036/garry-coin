@@ -145,6 +145,13 @@ Major performance optimizations and new loan features:
 - **Early Loan Repayment**: Implemented `/garryrepayloan` command with 25% penalty for loans < 24 hours, real-time compound interest calculation using Math.ceil(), interactive loan selection UI with Discord buttons
 - **Credit Score Anti-Abuse**: Enhanced credit scoring to prevent loan hoarding with active loan burden penalties (5 pts/loan + 15 pts for loans >7 days), debt ratio penalties (10-50 pts), and automatic score updates on loan creation/payment
 
+### 2025-08-19: Game Stability & Enhanced Rain Command
+Fixed deadlocked games and dramatically enhanced the rain command:
+- **RTB Deadlock Fix**: Implemented automatic cleanup in `getActiveBusGame()` marking games inactive >5 minutes as "abandoned", preventing stuck games from blocking new ones. Added logging and UI support for abandoned status.
+- **Enhanced Make It Rain**: Added optional `amount` parameter (1-1M range), dynamic weather messages scaling with powers of 10 (drizzle → monsoon → biblical flood → cosmic precipitation), pseudo-animation through progressive message editing with 3-phase buildup
+- **Weather Theatrics**: Created dramatic escalation system with emoji combinations and intensity levels (gentle → apocalyptic), localized number formatting, enhanced error messages with exact costs
+- **Database Resilience**: PostgreSQL string columns naturally support new statuses without migration, cleanup runs on every `getActiveBusGame()` call for self-healing architecture
+
 ## Dev Topics
 
 ### Database Architecture & Performance

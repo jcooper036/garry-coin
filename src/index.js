@@ -274,21 +274,46 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         // Acknowledge the interaction to prevent timeout
         res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
-        let successCount = 0;
-        for (const member of response.members.values()) {
-          if (member.user.bot || member.user.id === response.senderId) continue;
+        // Create animation effect by showing build-up messages
+        const { emoji, intensity } = response.weatherMessage;
+        
+        // Phase 1: Weather system detecting
+        await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: `${emoji} Weather system detecting... **${intensity}** patterns forming...` }),
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Phase 2: Storm building
+        await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: `${emoji}${emoji} **INCOMING ${intensity.toUpperCase()} WEATHER EVENT** ${emoji}${emoji}\n\n*Atmospheric pressure rising...*` }),
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
+        // Phase 3: Process transfers
+        let successCount = 0;
+        const amount = response.amount || 1;
+        
+        for (const member of response.members.values()) {
           await findOrCreateUser(member.user.id);
-          const result = await transfer(response.senderId, member.user.id, 1, 'user_to_user_make_it_rain');
+          const result = await transfer(response.senderId, member.user.id, amount, 'user_to_user_make_it_rain');
           if (result.success) {
             successCount++;
           }
         }
 
+        // Phase 4: Final dramatic announcement
+        const finalMessage = response.weatherMessage.announcement + `\n\n✅ **Weather event complete!** Successfully distributed to **${successCount}/${response.members.size}** members.`;
+        
         await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `You have made it rain on ${successCount} members of the server!` }),
+          body: JSON.stringify({ content: finalMessage }),
         });
         return;
       }
