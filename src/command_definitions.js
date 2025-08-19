@@ -29,7 +29,17 @@ const commands = [
   },
   {
     name: 'garrymakeitrain',
-    description: 'Gives one GarryCoin to every other member of the server.'
+    description: 'Makes it rain GarryCoin on all server members!',
+    options: [
+      {
+        name: 'amount',
+        description: 'Amount of GarryCoin to give each member (default: 1)',
+        type: 4, // INTEGER type
+        required: false,
+        min_value: 1,
+        max_value: 1000000
+      }
+    ]
   },
   {
     name: 'garryhistory',
