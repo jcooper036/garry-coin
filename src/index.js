@@ -597,7 +597,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
               report += `**Loan #${loan.id}** - ${loan.amount} GC @ ${loan.interest_rate}% daily (compounding)\n   Due: ${dueDateString} EST (${totalDue} GC total)\n   Lender: ${lenderDisplay}\n`;
             }
-            report += `\n`;
+            report += `\n*Interest amounts shown are simple interest estimates. Actual charges use daily compounding.*\n\n`;
           }
 
           report += `📈 **LOAN HISTORY SUMMARY**\n**Total Loans:** ${loanHistory.totalLoans}\n**Paid in Full:** ${loanHistory.paidLoans}\n**Defaults:** ${loanHistory.defaultedLoans}\n**On-Time Payments:** ${loanHistory.onTimePayments}\n**Debt Events:** ${loanHistory.debtEvents}\n\n`;
