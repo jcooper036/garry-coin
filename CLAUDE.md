@@ -185,6 +185,6 @@ Major performance optimizations and new loan features:
 ### Game Systems & Economics
 **Core Games**: Heist (interactive buttons, dynamic success rates), Ride the Bus (card-based progression), Wavelength (word association), Wordle integration (automated rewards).
 
-**Economic Features**: Federal Reserve system with AI-driven interventions, loan system with credit scoring, gambling statistics with proper data sourcing, progressive penalty systems.
+**Economic Features**: Federal Reserve system with AI-driven interventions, loan system with credit scoring, gambling statistics with proper data sourcing, progressive penalty systems. The Federal GarryCoin Reserve maintains its reputation for technical accuracy while preserving the delightfully predatory lending practices that make banking so... authentic. 🏦
 
 **Key Insight**: Game statistics require proper data sources - use game tables for instances, transaction tables for amounts to avoid impossible win rates.

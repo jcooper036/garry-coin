@@ -162,6 +162,10 @@ async function buildGameEmbed(gameId) {
         color = 0xdc3545; // Red for cancelled
         title = "❌ Bus Cancelled";
         description = "This bus ride was cancelled.";
+    } else if (game.status === 'abandoned') {
+        color = 0x6c757d; // Gray for abandoned
+        title = "🚫 Bus Abandoned";
+        description = "This bus ride was abandoned due to technical issues.";
     }
 
 
