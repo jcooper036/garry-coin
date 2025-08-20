@@ -1,9 +1,9 @@
-const { 
-  findOrCreateUser, 
-  getUser, 
-  calculateCreditScore, 
+const {
+  findOrCreateUser,
+  getUser,
+  calculateCreditScore,
   calculateRiskBasedInterestRate,
-  createLoan, 
+  createLoan,
   checkDailyLoanLimit,
   getFGRPolicy
 } = require('../db');
@@ -26,9 +26,9 @@ module.exports = {
         };
       }
 
-      if (amount > 100000) {
+      if (amount > 10000000000) {
         return {
-          content: '❌ Loan amount cannot exceed 100,000 GC.',
+          content: '❌ Loan amount cannot exceed 10,000,000,000 GC.',
           ephemeral: true,
         };
       }
@@ -59,7 +59,7 @@ module.exports = {
 
       // Calculate loan terms and validate eligibility
       await findOrCreateUser(userId);
-      
+
       // Get base interest rate from FGR or default to 5%
       const getBaseInterestRate = async () => {
         try {
@@ -69,9 +69,9 @@ module.exports = {
           return 5.0;
         }
       };
-      
+
       const baseInterestRate = await getBaseInterestRate();
-      
+
       // Calculate risk-based interest rate
       const rateResult = await calculateRiskBasedInterestRate(userId, lenderId, amount, baseInterestRate);
       const adjustedInterestRate = rateResult.rate;
@@ -100,13 +100,13 @@ module.exports = {
       const environment = process.env.NODE_ENV || 'development';
       const dailyInterestRate = adjustedInterestRate / 100; // Convert percentage to decimal
       const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 3; // 5 minutes in dev, 3 days in prod
-      
+
       // Compound interest formula: A = P(1 + r)^t
       const totalDue = Math.ceil(amount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
       const interestAmount = totalDue - amount;
       const dueDate = new Date();
       const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
-      
+
       if (environment === 'development') {
         dueDate.setMinutes(dueDate.getMinutes() + 5);
       } else {
@@ -139,7 +139,7 @@ module.exports = {
         `Do you want to accept this loan?`;
 
       const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-      
+
       const row = new ActionRowBuilder()
         .addComponents(
           new ButtonBuilder()
