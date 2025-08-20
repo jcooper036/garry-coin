@@ -2,12 +2,12 @@ const { processWordleTransaction } = require('./db');
 const { structuredLog } = require('./logger');
 
 const REWARD_STRUCTURE = {
-    1: 1000000000,
-    2: 10000000,
-    3: 5000000,
-    4: 2000000,
-    5: 1000000,
-    6: 1000000,
+    1: 1000,
+    2: 100,
+    3: 50,
+    4: 20
+    5: 10,
+    6: 10,
 };
 const CHEAT_PENALTY = 40;
 const CHEAT_CHANCE = 0.2;
