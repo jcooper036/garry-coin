@@ -152,6 +152,16 @@ Fixed deadlocked games and dramatically enhanced the rain command:
 - **Weather Theatrics**: Created dramatic escalation system with emoji combinations and intensity levels (gentle → apocalyptic), localized number formatting, enhanced error messages with exact costs
 - **Database Resilience**: PostgreSQL string columns naturally support new statuses without migration, cleanup runs on every `getActiveBusGame()` call for self-healing architecture
 
+### 2025-08-20: Security Vulnerability Analysis & TOCTOU Attack Prevention
+Comprehensive security review identified and fixed critical vulnerabilities:
+- **Security Analysis**: Completed full security audit covering authentication, database security, API key management, input validation, financial system abuse, and infrastructure security
+- **TOCTOU Vulnerability Discovery**: Identified Time-of-Check to Time-of-Use attack in heist system where users could start heist with sufficient balance, transfer money away, then execute heist with 0 balance
+- **Attack Vector Analysis**: Logs revealed users executing heists with `"balances":{"thief":0,"target":768944035}` indicating balance validation bypass in button click handler
+- **Critical Security Fix**: Added balance re-validation in heist button handler (`src/index.js:1292`) to prevent execution with insufficient funds at button-click time
+- **Comprehensive Security Logging**: Implemented detailed interaction logging capturing Discord signatures, user ID validation, command arguments, involved users, and execution context for all commands
+- **Logger Enhancement**: Added `security` category to structured logging system (`src/logger.js`) for dedicated security event tracking
+- **Attack Detection Framework**: Created logging system to detect user ID spoofing attempts through `idsMatch` validation and multi-source user ID verification
+
 ## Dev Topics
 
 ### Database Architecture & Performance
