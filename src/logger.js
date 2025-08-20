@@ -68,7 +68,8 @@ const logCategories = {
   WORDLE: 'wordle',
   LOTTERY: 'lottery',
   BOT: 'bot',
-  LOAN: 'loan'
+  LOAN: 'loan',
+  SECURITY: 'security'
 };
 
 // Convenience methods for structured logging
@@ -124,6 +125,10 @@ const structuredLog = {
   
   loan: (message, metadata = {}) => {
     logger.info(message, { ...metadata, category: logCategories.LOAN });
+  },
+  
+  security: (message, metadata = {}) => {
+    logger.info(message, { ...metadata, category: logCategories.SECURITY });
   },
   
   // Error logging with category

@@ -68,13 +68,13 @@ app.get('/', (req, res) => {
 app.get('/health', async (req, res) => {
   try {
     const startTime = Date.now();
-    
+
     // Test database connection
     await require('./db').db.raw('SELECT 1 as health_check');
-    
+
     const dbResponseTime = Date.now() - startTime;
     const poolMetrics = connectionWarmer.getPoolMetrics();
-    
+
     const health = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -88,7 +88,7 @@ app.get('/health', async (req, res) => {
         utilization: Math.round((poolMetrics.used / poolMetrics.max) * 100)
       }
     };
-    
+
     res.json(health);
   } catch (error) {
     structuredLog.error('Health check failed', { error: error.message });
@@ -102,6 +102,16 @@ app.get('/health', async (req, res) => {
 });
 
 app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
+  // Log #1: Essential interaction security info
+  structuredLog.security('Discord interaction received', {
+    signature: req.get('X-Signature-Ed25519')?.substring(0, 16) + '...',
+    timestamp: req.get('X-Signature-Timestamp'),
+    userAgent: req.get('User-Agent'),
+    ip: req.ip,
+    interactionType: req.body.type,
+    commandName: req.body.data?.name
+  });
+
   const fetch = (await import('node-fetch')).default;
   const { type, id, data } = req.body;
 
@@ -113,6 +123,51 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     const { name, options } = data;
     const { user } = req.body.member;
     const { channel_id, guild_id, channel } = req.body;
+
+    // Log #2: All command details with arguments and involved users
+    const commandOptions = options || [];
+    const involvedUsers = [];
+    
+    // Extract all user IDs from command arguments
+    commandOptions.forEach(option => {
+      if (option.type === 6) { // USER type
+        const targetUser = req.body.data?.resolved?.users?.[option.value];
+        involvedUsers.push({
+          paramName: option.name,
+          userId: option.value,
+          username: targetUser?.username || 'unknown',
+          isBot: targetUser?.bot || false
+        });
+      }
+    });
+
+    structuredLog.security('Command execution details', {
+      command: name,
+      executor: {
+        userId: user.id,
+        username: user.username,
+        globalName: user.global_name
+      },
+      arguments: commandOptions.map(opt => ({
+        name: opt.name,
+        type: opt.type,
+        value: opt.value
+      })),
+      involvedUsers: involvedUsers,
+      userIdValidation: {
+        extractedUserId: user.id,
+        memberUserId: req.body.member?.user?.id,
+        directUserId: req.body.user?.id,
+        idsMatch: user.id === req.body.member?.user?.id
+      },
+      context: {
+        channelId: channel_id,
+        channelName: channel?.name || 'unknown',
+        guildId: guild_id,
+        ip: req.ip
+      }
+    });
+
     try {
       await updateUserActivity(user.id);
     } catch (error) {
@@ -162,36 +217,36 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
     if (commands.has(name)) {
       const command = commands.get(name);
-      
+
       // Smart deferral: Check if pool is stressed and this command doesn't already defer
       const poolStressed = connectionWarmer.isPoolStressed();
       const poolMetrics = connectionWarmer.getPoolMetrics();
-      
+
       if (poolStressed) {
         structuredLog.warn('Pool stress detected, considering deferral', {
           command: name,
           poolMetrics,
           userId: user.id
         });
-        
+
         // For simple commands that don't already use postProcess, defer them
         // Complex commands already have their own deferral logic
         const alreadyDeferred = ['garrymakeitrain', 'garryreservereport', 'garryloan', 'garrycreditreport', 'ridethebus'].includes(name);
-        
+
         if (!alreadyDeferred) {
           structuredLog.info('Auto-deferring command due to pool stress', {
             command: name,
             poolMetrics,
             userId: user.id
           });
-          
+
           // Defer the response
           res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
-          
+
           // Execute command and send response via webhook
           try {
             const response = await command.execute(req.body, client);
-            
+
             await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -200,7 +255,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
                 flags: response.ephemeral ? InteractionResponseFlags.EPHEMERAL : undefined
               }),
             });
-            
+
             structuredLog.info('Auto-deferred command completed successfully', {
               command: name,
               userId: user.id
@@ -211,7 +266,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
               userId: user.id,
               error: error.message
             });
-            
+
             await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -230,7 +285,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           userId: user.id
         });
       }
-      
+
       const response = await command.execute(req.body, client);
 
       // Special post-processing for Ride the Bus game creation
@@ -276,29 +331,29 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
         // Create animation effect by showing build-up messages
         const { emoji, intensity } = response.weatherMessage;
-        
+
         // Phase 1: Weather system detecting
         await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: `${emoji} Weather system detecting... **${intensity}** patterns forming...` }),
         });
-        
+
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
         // Phase 2: Storm building
         await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: `${emoji}${emoji} **INCOMING ${intensity.toUpperCase()} WEATHER EVENT** ${emoji}${emoji}\n\n*Atmospheric pressure rising...*` }),
         });
-        
+
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         // Phase 3: Process transfers
         let successCount = 0;
         const amount = response.amount || 1;
-        
+
         for (const member of response.members.values()) {
           await findOrCreateUser(member.user.id);
           const result = await transfer(response.senderId, member.user.id, amount, 'user_to_user_make_it_rain');
@@ -309,7 +364,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
         // Phase 4: Final dramatic announcement
         const finalMessage = response.weatherMessage.announcement + `\n\n✅ **Weather event complete!** Successfully distributed to **${successCount}/${response.members.size}** members.`;
-        
+
         await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -544,11 +599,11 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
             const factors = [];
             const balancePoints = Math.min((Math.max(user.balance, 0) / 100), 100);
             factors.push(`💰 **Balance Factor (30%):** ${balancePoints.toFixed(0)}/100 points`);
-            
+
             const winRate = gamblingStats.overall.winRate || 0;
             const winRatePoints = winRate * 2.5;
             factors.push(`🎲 **Gambling Performance (25%):** ${winRatePoints.toFixed(0)}/250 points`);
-            
+
             let loanHistoryPoints = 100;
             if (loanHistory.totalLoans > 0) {
               const debtEventRate = loanHistory.debtEvents / loanHistory.totalLoans;
@@ -557,7 +612,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
               else loanHistoryPoints = 25;
             }
             factors.push(`📋 **Loan History (25%):** ${loanHistoryPoints}/125 points`);
-            
+
             // Active Loan Burden Factor
             let activeLoanPenalty = 0;
             if (activeLoans.length > 0) {
@@ -567,20 +622,20 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
               const oldLoans = activeLoans.filter(loan => new Date(loan.created_at) < sevenDaysAgo);
               activeLoanPenalty += oldLoans.length * 15;
             }
-            factors.push(`🏦 **Active Loan Burden (10%):** -${activeLoanPenalty} points (${activeLoans.length} loans${activeLoanPenalty > activeLoans.length * 5 ? `, ${(activeLoanPenalty - activeLoans.length * 5) / 15} old` : ''})`); 
-            
+            factors.push(`🏦 **Active Loan Burden (10%):** -${activeLoanPenalty} points (${activeLoans.length} loans${activeLoanPenalty > activeLoans.length * 5 ? `, ${(activeLoanPenalty - activeLoans.length * 5) / 15} old` : ''})`);
+
             // Active Debt Ratio Factor
             let debtRatioPenalty = 0;
             if (activeLoans.length > 0) {
               const totalActiveDebt = activeLoans.reduce((sum, loan) => sum + loan.amount, 0);
               const debtRatio = user.balance > 0 ? totalActiveDebt / user.balance : 2;
-              
+
               if (debtRatio > 1) debtRatioPenalty = 50;
               else if (debtRatio > 0.5) debtRatioPenalty = 25;
               else if (debtRatio > 0.25) debtRatioPenalty = 10;
             }
             factors.push(`📊 **Debt Ratio Penalty (10%):** -${debtRatioPenalty} points`);
-            
+
             return factors.join('\n');
           };
 
@@ -679,7 +734,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
     if (custom_id.startsWith('loan_')) {
       const parts = custom_id.split('_');
       const action = parts[1];
-      
+
       if (action === 'reject') {
         return res.send({
           type: InteractionResponseType.UPDATE_MESSAGE,
@@ -689,10 +744,10 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           },
         });
       }
-      
+
       if (action === 'accept') {
         const [_, __, userId, lenderId, amount, interestRate] = parts;
-        
+
         // Verify the user clicking the button is the same as the borrower
         if (playerId !== userId) {
           return res.send({
@@ -729,7 +784,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
           const maxLoanAmount = Math.floor(lender.balance * 0.5);
           const requestedAmount = parseInt(amount);
-          
+
           if (requestedAmount > maxLoanAmount) {
             const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
             throw new Error(`Loan amount now exceeds 50% of ${lenderName}'s balance. Max available: ${maxLoanAmount} GC`);
@@ -744,7 +799,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
               return 5.0;
             }
           };
-          
+
           const baseInterestRate = await getBaseInterestRate();
           const rateResult = await calculateRiskBasedInterestRate(userId, lenderId, requestedAmount, baseInterestRate);
           const finalInterestRate = rateResult.rate;
@@ -767,7 +822,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           const environment = process.env.NODE_ENV || 'development';
           const dailyInterestRate = finalInterestRate / 100; // Convert percentage to decimal
           const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 3; // 5 minutes in dev, 3 days in prod
-          
+
           // Compound interest formula: A = P(1 + r)^t
           const totalDue = Math.floor(requestedAmount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
           const interestAmount = totalDue - requestedAmount;
@@ -792,9 +847,9 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               content: typeof error.message === 'string' ? error.message : '❌ An error occurred while processing your loan. Please try again later.',
-              components: [] 
+              components: []
             }),
           });
         }
@@ -806,7 +861,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
     if (custom_id.startsWith('repay_')) {
       const parts = custom_id.split('_');
       const action = parts[1];
-      
+
       if (action === 'cancel') {
         return res.send({
           type: InteractionResponseType.UPDATE_MESSAGE,
@@ -816,10 +871,10 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           },
         });
       }
-      
+
       if (action === 'select') {
         const [_, __, loanId, userId] = parts;
-        
+
         // Verify the user clicking the button is the borrower
         if (playerId !== userId) {
           return res.send({
@@ -836,7 +891,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
         try {
           const { getActiveLoan, calculateCurrentAmountDue } = require('./db');
-          
+
           const loan = await getActiveLoan(parseInt(loanId));
           if (!loan || loan.borrower_user_id !== userId) {
             throw new Error('Loan not found or not accessible.');
@@ -902,10 +957,10 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
         }
         return;
       }
-      
+
       if (action === 'confirm') {
         const [_, __, loanId, userId] = parts;
-        
+
         // Verify the user clicking the button is the borrower
         if (playerId !== userId) {
           return res.send({
@@ -922,18 +977,18 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
         try {
           const { getActiveLoan, calculateCurrentAmountDue, getUser, transfer } = require('./db');
-          
+
           const loan = await getActiveLoan(parseInt(loanId));
           if (!loan || loan.borrower_user_id !== userId) {
             throw new Error('Loan not found or not accessible.');
           }
 
           const amountDue = calculateCurrentAmountDue(loan);
-          
+
           // Process the repayment with FGR bailout support (no need to check funds - FGR guarantees loans)
           const { payLoan } = require('./db');
           const paymentResult = await payLoan(parseInt(loanId), amountDue, client.user.id);
-          
+
           if (!paymentResult.success) {
             throw new Error(paymentResult.message || 'Repayment failed.');
           }
@@ -955,17 +1010,17 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
             successMessage += `🏛️ **Federal GarryCoin Reserve Intervention**\n` +
               `💸 You paid: ${paymentResult.paid_amount} GC\n` +
               `🆘 FGR covered: ${details.shortfall} GC\n`;
-            
+
             if (details.transferredFromBot > 0) {
               successMessage += `💰 (${details.transferredFromBot} GC transferred from reserves)\n`;
             }
             if (details.grantedAmount > 0) {
               successMessage += `🖨️ (${details.grantedAmount} GC created by FGR emergency powers)\n`;
             }
-            
+
             successMessage += `\n🎉 **The gracious Federal GarryCoin Reserve has ensured your lender was made whole!**\n` +
               `Your loan obligation is fulfilled thanks to FGR intervention.`;
-            
+
             if (paymentResult.went_into_debt) {
               successMessage += `\n\n⚠️ Note: This payment pushed you into debt. Work your way back to positive balance!`;
             }
@@ -1257,6 +1312,17 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: "Could not find your target's user data.", flags: InteractionResponseFlags.EPHEMERAL } });
         }
 
+        // Re-check balance at button click time to prevent TOCTOU attack
+        if (thief.balance < wager) {
+          return res.send({
+            type: InteractionResponseType.UPDATE_MESSAGE,
+            data: {
+              content: `Heist failed - insufficient funds! Your balance is ${thief.balance} GC, but you need ${wager} GC to proceed.`,
+              components: [],
+            },
+          });
+        }
+
         const thiefBalance = thief.balance;
         const targetBalance = target.balance;
 
@@ -1419,7 +1485,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
 app.listen(PORT, () => {
   structuredLog.info('Server started', { port: PORT, category: 'system' });
-  
+
   // Start connection warming to prevent stale connection timeouts
   connectionWarmer.start();
 });
