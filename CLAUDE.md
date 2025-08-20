@@ -161,6 +161,7 @@ Comprehensive security review identified and fixed critical vulnerabilities:
 - **Comprehensive Security Logging**: Implemented detailed interaction logging capturing Discord signatures, user ID validation, command arguments, involved users, and execution context for all commands
 - **Logger Enhancement**: Added `security` category to structured logging system (`src/logger.js`) for dedicated security event tracking
 - **Attack Detection Framework**: Created logging system to detect user ID spoofing attempts through `idsMatch` validation and multi-source user ID verification
+- **Transaction History Enhancement**: Upgraded `/garryhistory` and `/garryreceipt` commands with comprehensive transaction type mapping, visual polish, and "sent/received X GC to/from [user] for [reason]" format including proper emoji mapping for all transaction types (RTB refunds, house grants, make it rain, etc.)
 
 ## Dev Topics
 
