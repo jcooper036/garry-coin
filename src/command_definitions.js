@@ -105,7 +105,7 @@ const commands = [
   },
   {
     name: 'heist',
-    description: 'Attempt to steal GarryCoins from another user or the bot.',
+    description: 'Attempt to steal GarryCoins from another user or the bot. If you lack funds, you may borrow from your target.',
     options: [
       {
         name: 'amount',

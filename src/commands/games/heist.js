@@ -20,14 +20,6 @@ module.exports = {
       };
     }
 
-    const player = await findOrCreateUser(playerId);
-    if (player.balance < wager) {
-      return {
-        content: `You don\'t have enough GarryCoins for this heist. Your balance is ${player.balance}.`,
-        ephemeral: true,
-      };
-    }
-
     let targetId;
     let targetName;
 
@@ -43,7 +35,41 @@ module.exports = {
       targetName = 'the bot';
     }
 
+    const player = await findOrCreateUser(playerId);
     const target = await findOrCreateUser(targetId);
+    
+    // Check if player has enough funds
+    if (player.balance < wager) {
+      // Check if target has enough for the shortfall
+      const shortfall = wager - player.balance;
+      
+      if (target.balance >= shortfall) {
+        // Offer the "take coins anyway" option
+        const confirmRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId(`heist_confirm_${wager}_${targetId}`)
+              .setLabel('Take the coins anyway')
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId(`heist_cancel_${wager}_${targetId}`)
+              .setLabel('Cancel heist')
+              .setStyle(ButtonStyle.Secondary)
+          );
+        
+        return {
+          content: `You don't have enough GarryCoins for this heist (you have ${player.balance}, need ${wager}). Would you like to take the coins anyway?`,
+          components: [confirmRow],
+          ephemeral: true,
+        };
+      } else {
+        return {
+          content: `You don\'t have enough GarryCoins for this heist. Your balance is ${player.balance}.`,
+          ephemeral: true,
+        };
+      }
+    }
+    
     if (target.balance < wager) {
       return {
         content: `${targetName} is too poor for this heist. They only have ${target.balance} GarryCoins.`,

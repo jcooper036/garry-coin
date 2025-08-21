@@ -3,7 +3,7 @@ const express = require('express');
 const { verifyKeyMiddleware } = require('discord-interactions');
 const { InteractionType, InteractionResponseType, InteractionResponseFlags } = require('discord-interactions');
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers, createWavelengthGame, getActiveWavelengthGame, addPlayerToWavelengthGame, getWavelengthPlayers, getWavelengthGame, updateWavelengthPlayer, getGamblingStats, getGamblingLeaderboard, getEconomicMetrics, getFGREvents } = require('./db');
+const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGame, addPlayerToBusGame, createBusGame, cancelBusGame, grant, getBusGamePlayers, createWavelengthGame, getActiveWavelengthGame, addPlayerToWavelengthGame, getWavelengthPlayers, getWavelengthGame, updateWavelengthPlayer, getGamblingStats, getGamblingLeaderboard, getEconomicMetrics, getFGREvents, db, recordTransaction } = require('./db');
 const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const { endWavelengthGame, startWavelengthTimer } = require('./commands/games/wavelength/wavelength_helpers');
 const { structuredLog } = require('./logger');
@@ -127,7 +127,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
     // Log #2: All command details with arguments and involved users
     const commandOptions = options || [];
     const involvedUsers = [];
-    
+
     // Extract all user IDs from command arguments
     commandOptions.forEach(option => {
       if (option.type === 6) { // USER type
@@ -377,7 +377,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
       if (response.postProcess === 'release_files_investigation') {
         const { getReleaseFilesCase } = require('./db');
         const { releaseFilesInvestigator } = require('./release_files_investigator');
-        
+
         // Acknowledge the interaction to prevent timeout
         res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
@@ -391,7 +391,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         // Start the investigation asynchronously
         try {
           const investigationCase = await getReleaseFilesCase(response.caseId);
-          
+
           // Create a mock interaction object for the investigator
           const mockInteraction = {
             editReply: async ({ content }) => {
@@ -404,7 +404,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
           };
 
           await releaseFilesInvestigator.conductInvestigation(investigationCase, mockInteraction, client);
-          
+
         } catch (error) {
           structuredLog.error('Release Files investigation failed', error, {
             caseId: response.caseId,
@@ -418,7 +418,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: fallbackResponse }),
-          }).catch(() => {}); // Ignore if edit fails
+          }).catch(() => { }); // Ignore if edit fails
         }
         return;
       }
@@ -1328,6 +1328,115 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
         return;
       }
     }
+    if (custom_id.startsWith('heist_confirm_')) {
+      const [_, __, wagerStr, targetId] = custom_id.split('_');
+      const wager = parseInt(wagerStr, 10);
+
+      // Check permissions (only the person who initiated can confirm)
+      if (req.body.message.interaction.user.id !== playerId) {
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: "This isn't your heist! Start your own with `/heist`.",
+            flags: InteractionResponseFlags.EPHEMERAL,
+          },
+        });
+      }
+
+      const { createLoan } = require('./db');
+
+      const thief = await getUser(playerId);
+      const target = await getUser(targetId);
+
+      if (!thief || !target) {
+        return res.send({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            content: "Could not find user data for the heist.",
+            components: [],
+          },
+        });
+      }
+
+      const shortfall = wager - thief.balance;
+
+      // Calculate dynamic interest rate based on heist amount to thief balance ratio
+      const heistToBalanceRatio = wager / Math.max(thief.balance, 1); // Avoid division by zero
+
+      // Logarithmic scale: 10% base, 25% at 1:10, 50% at 1:100, 100% at 1:1000, 200% at 1:10000+
+      let interestRate = 10; // 10% base rate
+      if (heistToBalanceRatio >= 10000) {
+        interestRate = 200; // 200% cap
+      } else if (heistToBalanceRatio >= 1000) {
+        interestRate = 100; // 100%
+      } else if (heistToBalanceRatio >= 100) {
+        interestRate = 50; // 50%
+      } else if (heistToBalanceRatio >= 10) {
+        interestRate = 25; // 25%
+      }
+      // For ratios < 10, keep base 10% rate
+
+      // Create the heist cover loan from target to thief
+      const loanResult = await createLoan(playerId, targetId, shortfall, interestRate);
+
+      if (!loanResult.success) {
+        return res.send({
+          type: InteractionResponseType.UPDATE_MESSAGE,
+          data: {
+            content: `Failed to secure funding for heist: ${loanResult.message}`,
+            components: [],
+          },
+        });
+      }
+
+      // Update the most recent loan disbursement transaction to mark it as heist_cover_loan
+      await db('transactions')
+        .where({
+          sending_user_id: targetId,
+          receiving_user_id: playerId,
+          amount: shortfall,
+          transaction_type: 'loan_disbursement'
+        })
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .update({ transaction_type: 'heist_cover_loan' });
+
+      // Start the heist with guaranteed success (no real wire cutting game)
+      const targetName = targetId === client.user.id ? 'the bot' : `<@${targetId}>`;
+
+      // Now transfer the heist amount from target to thief (heist victory)
+      await transfer(targetId, playerId, wager, 'heist_win');
+
+      const resultMessage = `🎯 Success! <@${playerId}> pulled off the heist, stealing ${wager} GarryCoins from ${targetName}!\n\n*The universe smiles upon those who dare...*`;
+
+      return res.send({
+        type: InteractionResponseType.UPDATE_MESSAGE,
+        data: {
+          content: resultMessage,
+          components: [],
+        },
+      });
+    }
+    if (custom_id.startsWith('heist_cancel_')) {
+      // Check permissions (only the person who initiated can cancel)
+      if (req.body.message.interaction.user.id !== playerId) {
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: "This isn't your heist! Start your own with `/heist`.",
+            flags: InteractionResponseFlags.EPHEMERAL,
+          },
+        });
+      }
+
+      return res.send({
+        type: InteractionResponseType.UPDATE_MESSAGE,
+        data: {
+          content: "Heist cancelled. Maybe next time!",
+          components: [],
+        },
+      });
+    }
     if (custom_id.startsWith('heist_')) {
       const [game, choice, wagerStr, targetId] = custom_id.split('_');
       const wager = parseInt(wagerStr, 10);
@@ -1364,13 +1473,39 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
         // Re-check balance at button click time to prevent TOCTOU attack
         if (thief.balance < wager) {
-          return res.send({
-            type: InteractionResponseType.UPDATE_MESSAGE,
-            data: {
-              content: `Heist failed - insufficient funds! Your balance is ${thief.balance} GC, but you need ${wager} GC to proceed.`,
-              components: [],
-            },
-          });
+          // Check if target has enough for the shortfall to offer loan option
+          const shortfall = wager - thief.balance;
+
+          if (target.balance >= shortfall) {
+            // Offer the "take coins anyway" option
+            const confirmRow = new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`heist_confirm_${wager}_${targetId}`)
+                  .setLabel('Take the coins anyway')
+                  .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                  .setCustomId(`heist_cancel_${wager}_${targetId}`)
+                  .setLabel('Cancel heist')
+                  .setStyle(ButtonStyle.Secondary)
+              );
+
+            return res.send({
+              type: InteractionResponseType.UPDATE_MESSAGE,
+              data: {
+                content: `You don't have enough GarryCoins for this heist (you have ${thief.balance}, need ${wager}). Would you like to take the coins anyway?`,
+                components: [confirmRow],
+              },
+            });
+          } else {
+            return res.send({
+              type: InteractionResponseType.UPDATE_MESSAGE,
+              data: {
+                content: `Heist failed - insufficient funds! Your balance is ${thief.balance} GC, but you need ${wager} GC to proceed.`,
+                components: [],
+              },
+            });
+          }
         }
 
         const thiefBalance = thief.balance;
