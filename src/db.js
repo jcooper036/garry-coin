@@ -509,6 +509,13 @@ module.exports = {
   getLoanHistory,
   updateCreditScore,
   calculateCurrentAmountDue,
+  // Release The Files
+  createReleaseFilesCase,
+  getReleaseFilesCase,
+  addReleaseFilesQuery,
+  addReleaseFilesCodebaseRef,
+  getDailyInvestigationLimit,
+  getReleaseFilesCaseHistory,
 };
 
 // --- Ride the Bus Functions
@@ -1372,4 +1379,103 @@ function calculateCurrentAmountDue(loan) {
   const daysElapsed = hoursElapsed / 24;
   const dailyRate = loan.interest_rate / 100;
   return Math.ceil(loan.amount * Math.pow(1 + dailyRate, daysElapsed));
+}
+
+// --- Release The Files Functions ---
+
+async function createReleaseFilesCase(submitterUserId, grievance, biasDirection, bribeAmount = 0) {
+  return withRetry(() => db.transaction(async trx => {
+    // Validate grievance
+    if (!grievance || grievance.trim().length === 0) {
+      throw new Error('Grievance cannot be empty');
+    }
+
+    const [newCase] = await trx('release_files_cases').insert({
+      submitter_user_id: submitterUserId,
+      grievance: grievance.trim(),
+      bias_direction: biasDirection,
+      bribe_amount: bribeAmount
+    }).returning('*');
+
+    structuredLog.security('Release Files case created', {
+      caseId: newCase.id,
+      submitterUserId,
+      biasDirection,
+      bribeAmount
+    });
+
+    return newCase;
+  }));
+}
+
+async function getReleaseFilesCase(caseId) {
+  return withRetry(() => db('release_files_cases').where({ id: caseId }).first());
+}
+
+async function addReleaseFilesQuery(caseId, queryText, queryResults, interpretation, supportsBias = true) {
+  return withRetry(() => db('release_files_queries').insert({
+    case_id: caseId,
+    query_text: queryText,
+    query_results: JSON.stringify(queryResults), // Ensure proper JSON serialization
+    interpretation,
+    supports_bias: supportsBias
+  }).returning('*'));
+}
+
+async function addReleaseFilesCodebaseRef(caseId, filePath, relevantContent, interpretation, supportsBias = true) {
+  return withRetry(() => db('release_files_codebase_refs').insert({
+    case_id: caseId,
+    file_path: filePath,
+    relevant_content: relevantContent,
+    interpretation,
+    supports_bias: supportsBias
+  }).returning('*'));
+}
+
+async function getDailyInvestigationLimit(userId) {
+  return withRetry(async () => {
+    // In development environment, no limits for easier testing
+    const environment = process.env.NODE_ENV || 'development';
+    if (environment === 'development') {
+      return { blocked: false };
+    }
+
+    // Production: Check if user already filed a case today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayCases = await db('release_files_cases')
+      .where({ submitter_user_id: userId })
+      .where('created_at', '>=', today)
+      .where('created_at', '<', tomorrow)
+      .count('* as count')
+      .first();
+
+    if (parseInt(todayCases.count) >= 1) {
+      return { blocked: true, reason: 'daily_limit' };
+    }
+
+    return { blocked: false };
+  });
+}
+
+async function getReleaseFilesCaseHistory(userId, mentionedUserId = null) {
+  return withRetry(async () => {
+    let query = db('release_files_cases')
+      .select('*')
+      .orderBy('created_at', 'desc');
+
+    if (userId) {
+      query = query.where({ submitter_user_id: userId });
+    }
+
+    if (mentionedUserId) {
+      // Search for cases where this user was mentioned in the grievance
+      query = query.where('grievance', 'like', `%${mentionedUserId}%`);
+    }
+
+    return query.limit(10);
+  });
 }
