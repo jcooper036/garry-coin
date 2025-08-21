@@ -15,15 +15,17 @@ module.exports = {
     
     // Extract options properly
     const options = interaction.data.options || [];
+    const investigationTargetOption = options.find(opt => opt.name === 'investigation_target');
     const grievanceOption = options.find(opt => opt.name === 'grievance');
     const bribeOption = options.find(opt => opt.name === 'bribe');
     
+    const investigationTarget = investigationTargetOption ? investigationTargetOption.value : null;
     const grievance = grievanceOption ? grievanceOption.value : null;
     const bribeAmount = bribeOption ? bribeOption.value : 0;
 
-    if (!grievance) {
+    if (!grievance || !investigationTarget) {
       return {
-        content: '🚫 **ERROR:** You must provide a grievance to investigate!',
+        content: '🚫 **ERROR:** You must provide both a grievance and an investigation target!',
         ephemeral: true
       };
     }
@@ -62,11 +64,12 @@ module.exports = {
       const biasDirection = (bribeAmount > 0 && biasRoll < 0.75) || (bribeAmount === 0 && biasRoll < 0.5) ? 'for' : 'against';
 
       // Create the case in database
-      const investigationCase = await createReleaseFilesCase(userId, grievance, biasDirection, bribeAmount);
+      const investigationCase = await createReleaseFilesCase(userId, investigationTarget, grievance, biasDirection, bribeAmount);
 
       structuredLog.security('Release Files case opened', {
         caseId: investigationCase.id,
         userId,
+        investigationTarget,
         biasDirection,
         bribeAmount,
         grievance: grievance.substring(0, 100)
@@ -77,6 +80,7 @@ module.exports = {
         postProcess: 'release_files_investigation',
         caseId: investigationCase.id,
         userId: userId,
+        investigationTarget: investigationTarget,
         bribeAmount: bribeAmount,
         content: bribeAmount > 0
           ? `🔥 **BREAKING: FEDERAL INVESTIGATION LAUNCHED!** 🔥\n\n**Case #${investigationCase.id}** has been opened regarding: "${grievance}"\n\n*[CLASSIFIED NOTE: Bribe of ${bribeAmount} GC received and... noted]*\n\n**INVESTIGATION IN PROGRESS...**\n\nStand by for explosive findings.`
