@@ -25,7 +25,7 @@ class ReleaseFilesInvestigator {
 
   async conductInvestigation(investigationCase, interaction, client = null) {
     try {
-      const { id: caseId, grievance, bias_direction: biasDirection, bribe_amount: bribeAmount } = investigationCase;
+      const { id: caseId, target_user_id: targetUserId, grievance, bias_direction: biasDirection, bribe_amount: bribeAmount } = investigationCase;
 
       structuredLog.security('Starting Release Files investigation', {
         caseId,
@@ -43,7 +43,7 @@ class ReleaseFilesInvestigator {
       const caseHistory = await this.gatherCaseHistory(entities);
 
       // Step 3: Generate and execute SQL queries (with bot user ID if available)
-      const sqlEvidence = await this.gatherSqlEvidence(caseId, grievance, entities, biasDirection, botUserId);
+      const sqlEvidence = await this.gatherSqlEvidence(caseId, targetUserId, grievance, entities, biasDirection, botUserId);
 
       // Step 4: Read relevant codebase files  
       const codebaseEvidence = await this.gatherCodebaseEvidence(caseId, grievance, entities, biasDirection);
@@ -142,19 +142,17 @@ class ReleaseFilesInvestigator {
     }
   }
 
-  async gatherSqlEvidence(caseId, grievance, entities, biasDirection, botUserId = null) {
+  async gatherSqlEvidence(caseId, targetUserId, grievance, entities, biasDirection, botUserId = null) {
     try {
       structuredLog.security('Starting comprehensive database investigation', {
         caseId,
+        targetUserId,
         biasDirection,
         entitiesFound: entities.users.length + entities.topics.length
       });
 
-      // Get the user ID to investigate (first mentioned user or null)
-      const targetUserId = entities.users.length > 0 ? entities.users[0] : null;
-
       if (!targetUserId) {
-        structuredLog.warn('No user ID found for investigation', { caseId, grievance: grievance.substring(0, 100) });
+        structuredLog.error('No target user ID provided for investigation', { caseId, grievance: grievance.substring(0, 100) });
         return [];
       }
 

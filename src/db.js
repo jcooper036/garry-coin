@@ -1383,15 +1383,21 @@ function calculateCurrentAmountDue(loan) {
 
 // --- Release The Files Functions ---
 
-async function createReleaseFilesCase(submitterUserId, grievance, biasDirection, bribeAmount = 0) {
+async function createReleaseFilesCase(submitterUserId, targetUserId, grievance, biasDirection, bribeAmount = 0) {
   return withRetry(() => db.transaction(async trx => {
     // Validate grievance
     if (!grievance || grievance.trim().length === 0) {
       throw new Error('Grievance cannot be empty');
     }
+    
+    // Validate target user ID
+    if (!targetUserId) {
+      throw new Error('Target user ID is required');
+    }
 
     const [newCase] = await trx('release_files_cases').insert({
       submitter_user_id: submitterUserId,
+      target_user_id: targetUserId,
       grievance: grievance.trim(),
       bias_direction: biasDirection,
       bribe_amount: bribeAmount

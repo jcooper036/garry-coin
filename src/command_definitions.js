@@ -334,6 +334,12 @@ const commands = [
     description: 'File a grievance for AI investigation with bombastic federal agent response.',
     options: [
       {
+        name: 'investigation_target',
+        description: 'Discord user to investigate',
+        type: 6, // USER type
+        required: true,
+      },
+      {
         name: 'grievance',
         description: 'Your complaint or concern to be investigated.',
         type: 3, // STRING type
