@@ -5,6 +5,7 @@ function getTransactionReason(transactionType) {
     // Game types
     'heist_win': 'heist victory 💰',
     'heist_loss': 'heist attempt 🦹',
+    'heist_cover_loan': 'heist financing 🎭💸',
     'rtb_wager': 'ride the bus wager 🚌',
     'rtb_win_end_of_line': 'ride the bus jackpot 🎰',
     'rtb_refund_cancel': 'ride the bus refund ❌🚌',
