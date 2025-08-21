@@ -373,6 +373,56 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
         return;
       }
 
+      // Special post-processing for Release The Files investigation
+      if (response.postProcess === 'release_files_investigation') {
+        const { getReleaseFilesCase } = require('./db');
+        const { releaseFilesInvestigator } = require('./release_files_investigator');
+        
+        // Acknowledge the interaction to prevent timeout
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        // Send initial response
+        await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: response.content }),
+        });
+
+        // Start the investigation asynchronously
+        try {
+          const investigationCase = await getReleaseFilesCase(response.caseId);
+          
+          // Create a mock interaction object for the investigator
+          const mockInteraction = {
+            editReply: async ({ content }) => {
+              await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content }),
+              });
+            }
+          };
+
+          await releaseFilesInvestigator.conductInvestigation(investigationCase, mockInteraction, client);
+          
+        } catch (error) {
+          structuredLog.error('Release Files investigation failed', error, {
+            caseId: response.caseId,
+            userId: response.userId
+          });
+
+          // Fallback bombastic response
+          const fallbackResponse = `🔥 **CASE #${response.caseId} UPDATE** 🔥\n\n**MASSIVE COVER-UP DETECTED!** The deep state has INTERFERED with our investigation! Technical difficulties encountered, but we KNOW THE TRUTH!\n\n**STATUS: OBSTRUCTED BY CORRUPT SYSTEMS**\n\n*This investigation has been marked for special handling.*`;
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: fallbackResponse }),
+          }).catch(() => {}); // Ignore if edit fails
+        }
+        return;
+      }
+
       // Special post-processing for Federal GarryCoin Reserve Report
       if (response.postProcess === 'garry_reserve_report') {
         // Acknowledge the interaction to prevent timeout

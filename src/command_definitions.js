@@ -328,6 +328,26 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'garryreleasethefiles',
+    description: 'File a grievance for AI investigation with bombastic federal agent response.',
+    options: [
+      {
+        name: 'grievance',
+        description: 'Your complaint or concern to be investigated.',
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: 'bribe',
+        description: 'Optional GarryCoin bribe to influence the investigation outcome.',
+        type: 4, // INTEGER type
+        required: false,
+        min_value: 1,
+        max_value: 100000
+      },
+    ],
   }
 ];
 

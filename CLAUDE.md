@@ -163,6 +163,16 @@ Comprehensive security review identified and fixed critical vulnerabilities:
 - **Attack Detection Framework**: Created logging system to detect user ID spoofing attempts through `idsMatch` validation and multi-source user ID verification
 - **Transaction History Enhancement**: Upgraded `/garryhistory` and `/garryreceipt` commands with comprehensive transaction type mapping, visual polish, and "sent/received X GC to/from [user] for [reason]" format including proper emoji mapping for all transaction types (RTB refunds, house grants, make it rain, etc.)
 
+### 2025-08-21: Investigation System Overhaul & Dynamic Analytics
+Complete redesign of Release The Files investigation system with comprehensive analytics and emotional manipulation:
+- **Predefined Query System**: Replaced unreliable LLM-generated SQL with 10 comprehensive predefined queries covering user profiles, gambling performance, loan history, interactions, wealth rankings, game hosting, and suspicious patterns
+- **Dynamic Percentile Analytics**: Eliminated fixed bucketing in favor of real-time percentile calculations - users see exact rankings (87.3rd percentile) rather than vague categories ("wealthy")
+- **Economic Context Integration**: Suspicious transaction detection now uses dynamic thresholds based on 30-day economic activity rather than fixed amounts (amount vs average, percent of total wealth, precise percentiles)
+- **Bot Reference Detection**: Smart entity extraction detects when users reference "you", "u", "bot", "garry", etc. and automatically includes bot's Discord ID for comprehensive investigation
+- **Emotional Manipulation Enhancement**: Transformed technical investigation reports into emotionally-charged populist content targeting fear/anger centers with strategic CAPS, translated technical terms for masses ("rtb_refund_cancel" → "gambling refund after cancellation")
+- **Discord UX Polish**: Automatic conversion of raw user IDs to proper Discord mentions for clickable, highlighted usernames
+- **Evidence Balance System**: Prioritizes database evidence (0-2 points) over codebase evidence (1 point) with comprehensive logging for debugging and bias direction tracking
+
 ## Dev Topics
 
 ### Database Architecture & Performance
@@ -206,3 +216,28 @@ Comprehensive security review identified and fixed critical vulnerabilities:
 **Economic Features**: Federal Reserve system with AI-driven interventions, loan system with credit scoring, gambling statistics with proper data sourcing, progressive penalty systems. The Federal GarryCoin Reserve maintains its reputation for technical accuracy while preserving the delightfully predatory lending practices that make banking so... authentic. 🏦
 
 **Key Insight**: Game statistics require proper data sources - use game tables for instances, transaction tables for amounts to avoid impossible win rates.
+
+### Investigation & Analytics Architecture
+**Query System Evolution**:
+- **Initial**: LLM-generated SQL queries with validation and safety checks (2025-08-20)
+- **Reliability Issues**: Query generation failures, inconsistent results, debugging difficulties
+- **Predefined System**: 10 comprehensive hand-crafted queries with parameter handling (`src/investigation_queries.js`) (2025-08-21)
+- **Dynamic Analytics**: Real-time percentile calculations instead of fixed bucketing for adaptive scaling
+
+**Evidence Processing Pipeline**:
+- **Data Collection**: `executeAllInvestigationQueries()` runs all 10 queries with smart parameter binding
+- **Evidence Selection**: Prioritizes queries with actual data, limits to 2 database + 1 codebase evidence
+- **AI Interpretation**: Two-stage LLM processing (neutral extraction → biased interpretation) with technical term translation
+- **Post-Processing**: User ID to Discord mention conversion, emotional language enhancement
+
+**Key Technical Challenges**:
+- **Parameter Binding**: Complex queries need different parameter counts - solved with query-specific parameter handling
+- **Bot Reference Detection**: Natural language processing to detect "you", "bot", "garry" references and map to actual Discord user ID
+- **Percentile Performance**: Efficient percentile calculations across large datasets using window functions and subqueries
+- **Discord Integration**: Proper mention formatting (`<@userid>`) for UX, strategic deferral for complex investigations
+
+**Investigation System Design Principles**:
+- **Reliability over Flexibility**: Predefined queries ensure consistent results vs unpredictable LLM generation
+- **Evidence-Based Bias**: Real data interpreted with explicit bias rather than fabricated claims
+- **Emotional Targeting**: Technical accuracy combined with populist language for maximum engagement
+- **Comprehensive Coverage**: 10 query types ensure no investigation area is missed (financial, social, gambling, technical)
