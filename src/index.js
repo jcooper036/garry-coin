@@ -871,13 +871,13 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           // Calculate final loan details with daily compounding
           const environment = process.env.NODE_ENV || 'development';
           const dailyInterestRate = finalInterestRate / 100; // Convert percentage to decimal
-          const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 3; // 5 minutes in dev, 3 days in prod
+          const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 1; // 5 minutes in dev, 1 day in prod
 
           // Compound interest formula: A = P(1 + r)^t
           const totalDue = Math.floor(requestedAmount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
           const interestAmount = totalDue - requestedAmount;
           const dueDate = new Date(loanResult.loan.due_date);
-          const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
+          const repaymentPeriod = environment === 'development' ? '5 minutes' : '1 day';
 
           const dueDateString = dueDate.toLocaleDateString('en-US', {
             month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
