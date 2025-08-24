@@ -99,18 +99,18 @@ module.exports = {
       // Calculate loan terms with daily compounding interest
       const environment = process.env.NODE_ENV || 'development';
       const dailyInterestRate = adjustedInterestRate / 100; // Convert percentage to decimal
-      const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 3; // 5 minutes in dev, 3 days in prod
+      const loanPeriodDays = environment === 'development' ? (5 / (24 * 60)) : 1; // 5 minutes in dev, 1 day in prod
 
       // Compound interest formula: A = P(1 + r)^t
       const totalDue = Math.ceil(amount * Math.pow(1 + dailyInterestRate, loanPeriodDays));
       const interestAmount = totalDue - amount;
       const dueDate = new Date();
-      const repaymentPeriod = environment === 'development' ? '5 minutes' : '3 days';
+      const repaymentPeriod = environment === 'development' ? '5 minutes' : '1 day';
 
       if (environment === 'development') {
         dueDate.setMinutes(dueDate.getMinutes() + 5);
       } else {
-        dueDate.setDate(dueDate.getDate() + 3);
+        dueDate.setDate(dueDate.getDate() + 1);
       }
 
       const dueDateString = dueDate.toLocaleDateString('en-US', {
