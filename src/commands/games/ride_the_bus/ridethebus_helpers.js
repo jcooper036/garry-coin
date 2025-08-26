@@ -316,6 +316,7 @@ async function processRoundResults(gameId, client) {
                     const min = Math.min(prevCard.value, prevCard2.value);
                     const max = Math.max(prevCard.value, prevCard2.value);
                     const isInside = outcomeCard.value > min && outcomeCard.value < max;
+                    // we define both boundaries here because ties are loses
                     const isOutside = outcomeCard.value > max && outcomeCard.value < min;
                     correct = (choice === 'inside' && isInside) ||
                         (choice === 'outside' && isOutside);
