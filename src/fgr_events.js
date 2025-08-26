@@ -1,8 +1,8 @@
-const { 
-  getEconomicMetrics, 
-  getGamblingLeaderboard, 
-  grant, 
-  transfer, 
+const {
+  getEconomicMetrics,
+  getGamblingLeaderboard,
+  grant,
+  transfer,
   recordFGREvent,
   getUser,
   getFGRPolicy,
@@ -25,12 +25,12 @@ class FGREvents {
     this.lastQECheck = Date.now();
     this.lastBuybackCheck = Date.now();
     this.lastAnnouncementCheck = Date.now();
-    
+
     // Timing configuration (in milliseconds)
     this.QE_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // Check every 6 hours
     this.BUYBACK_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // Check daily
     this.ANNOUNCEMENT_INTERVAL = 12 * 60 * 60 * 1000; // Check every 12 hours
-    
+
     // Probability thresholds
     this.QE_PROBABILITY = 0.15; // 15% chance when conditions met
     this.BUYBACK_PROBABILITY = 0.1; // 10% chance per day
@@ -42,7 +42,7 @@ class FGREvents {
    */
   start() {
     structuredLog.info('FGR Events system starting');
-    
+
     // Check for events every 30 minutes
     setInterval(() => {
       this.checkForEvents().catch(error => {
@@ -89,13 +89,13 @@ class FGREvents {
    */
   async checkQuantitativeEasing() {
     const metrics = await getEconomicMetrics();
-    
+
     // Trigger conditions: low gambling volume or low activity rate
     const lowGamblingVolume = metrics.economicMetrics.weeklyGamblingVolume < 100;
     const lowActivityRate = metrics.userMetrics.activityRate < 30;
-    
+
     const shouldTrigger = (lowGamblingVolume || lowActivityRate) && Math.random() < this.QE_PROBABILITY;
-    
+
     if (shouldTrigger) {
       await this.executeQuantitativeEasing(metrics);
     }
@@ -129,9 +129,9 @@ class FGREvents {
           recipients: targets.length
         });
         announcement = await llmService.generateText(contextualPrompt);
-        structuredLog.info('QE announcement generated via LLM', { 
-          recipientCount: targets.length, 
-          amount: qeAmount 
+        structuredLog.info('QE announcement generated via LLM', {
+          recipientCount: targets.length,
+          amount: qeAmount
         });
       } catch (error) {
         structuredLog.error('Failed to generate QE announcement via LLM', error, {
@@ -191,7 +191,7 @@ ${announcement}
    */
   async checkBuyback() {
     const shouldTrigger = Math.random() < this.BUYBACK_PROBABILITY;
-    
+
     if (shouldTrigger) {
       await this.executeBuyback();
     }
@@ -225,10 +225,10 @@ ${announcement}
         const fairValue = Math.floor(target.net_profit * 0.15) + Math.floor(Math.random() * 20) + 10;
         const premium = 1.05 + (Math.random() * 0.15); // 105-120% premium
         const buybackAmount = Math.floor(fairValue * premium);
-        
+
         // Don't buy more than they have
         const actualAmount = Math.min(buybackAmount, user.balance);
-        
+
         if (actualAmount >= 10) {
           buybackData.push({
             userId: target.user_id,
@@ -252,9 +252,9 @@ ${announcement}
           participants: buybackData.length
         });
         announcement = await llmService.generateText(contextualPrompt);
-        structuredLog.info('Buyback announcement generated via LLM', { 
-          participantCount: buybackData.length, 
-          totalAmount: totalBought 
+        structuredLog.info('Buyback announcement generated via LLM', {
+          participantCount: buybackData.length,
+          totalAmount: totalBought
         });
       } catch (error) {
         structuredLog.error('Failed to generate buyback announcement via LLM', error, {
@@ -269,7 +269,7 @@ ${announcement}
       // Execute the buybacks
       await db.transaction(async trx => {
         for (const buyback of buybackData) {
-          await transfer(buyback.userId, 'federal_reserve', buyback.amount, 'fgr_strategic_buyback', trx);
+          await transfer(buyback.userId, discordClient.user.id, buyback.amount, 'fgr_strategic_buyback', trx);
         }
       });
 
@@ -280,7 +280,7 @@ ${announcement}
       }, totalBought, buybackData.length);
 
       // Format buyback details
-      const buybackDetails = buybackData.map(b => 
+      const buybackDetails = buybackData.map(b =>
         `• <@${b.userId}>: ${b.amount} GC (${b.premium}% premium)`
       ).join('\n');
 
@@ -312,7 +312,7 @@ ${buybackDetails}
    */
   async checkPolicyAnnouncement() {
     const shouldTrigger = Math.random() < this.ANNOUNCEMENT_PROBABILITY;
-    
+
     if (shouldTrigger) {
       await this.makePolicyAnnouncement();
     }
@@ -325,11 +325,11 @@ ${buybackDetails}
     try {
       // Get current economic metrics for rate adjustment
       const metrics = await getEconomicMetrics();
-      
+
       // Select policy stance that will determine rate direction
       const policyStances = ['dovish', 'hawkish', 'qt', 'emergency'];
       const selectedPolicy = policyStances[Math.floor(Math.random() * policyStances.length)];
-      
+
       // Random economic "topics" to discuss
       const topics = [
         'yield curve inversions in the meme-coin sector',
@@ -343,7 +343,7 @@ ${buybackDetails}
       ];
 
       const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-      
+
       // Adjust interest rates based on policy stance and economic conditions
       const rateAdjustment = await this.adjustInterestRates(metrics, selectedPolicy, randomTopic);
 
@@ -358,7 +358,7 @@ ${buybackDetails}
           rationale: rateAdjustment.rationale
         });
         announcement = await llmService.generateText(contextualPrompt);
-        structuredLog.info('Policy announcement generated via LLM', { 
+        structuredLog.info('Policy announcement generated via LLM', {
           topic: randomTopic,
           policy: selectedPolicy,
           rateChanged: rateAdjustment.changed
@@ -418,20 +418,20 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
       // Get current interest rate
       const currentPolicy = await getFGRPolicy('base_interest_rate');
       const currentRate = currentPolicy ? parseFloat(currentPolicy.policy_data.rate || 5.0) : 5.0;
-      
+
       let newRate = currentRate;
       let rationale = '';
-      
+
       // Determine rate adjustment based on economic conditions and policy
       const activityRate = metrics.userMetrics.activityRate || 0;
       const gamblingVolume = metrics.economicMetrics.weeklyGamblingVolume || 0;
       const totalSupply = metrics.economicMetrics.totalSupply || 1000;
-      
+
       // Economic condition analysis
       const lowActivity = activityRate < 30;
       const lowGamblingVolume = gamblingVolume < 100;
       const highLiquidity = totalSupply > 50000;
-      
+
       // Policy-based rate adjustments
       switch (policyType) {
         case 'dovish':
@@ -445,7 +445,7 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
             rationale = 'Maintaining expansionary stance to support continued growth';
           }
           break;
-          
+
         case 'hawkish':
         case 'qt':
           // Restrictive policies: Raise rates to reduce borrowing/cool economy
@@ -457,7 +457,7 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
             rationale = 'Tightening monetary conditions to maintain price stability';
           }
           break;
-          
+
         default:
           // Neutral adjustment based on economic conditions only
           if (lowActivity && lowGamblingVolume) {
@@ -470,13 +470,13 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
             rationale = 'Maintaining current rate given balanced economic conditions';
           }
       }
-      
+
       // Only update if rate actually changes
       if (Math.abs(newRate - currentRate) >= 0.1) {
         // Update the policy
         if (currentPolicy) {
           await updateFGRPolicy('base_interest_rate', {
-            policy_data: { 
+            policy_data: {
               rate: newRate,
               previous_rate: currentRate,
               adjustment_reason: rationale,
@@ -499,10 +499,10 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
             }
           });
         }
-        
+
         // Record the rate change as an FGR event
-        await recordFGREvent('interest_rate_change', 
-          `Federal GarryCoin Reserve adjusts base lending rate from ${currentRate.toFixed(2)}% to ${newRate.toFixed(2)}%`, 
+        await recordFGREvent('interest_rate_change',
+          `Federal GarryCoin Reserve adjusts base lending rate from ${currentRate.toFixed(2)}% to ${newRate.toFixed(2)}%`,
           {
             old_rate: currentRate,
             new_rate: newRate,
@@ -515,14 +515,14 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
             }
           }
         );
-        
+
         structuredLog.info('FGR interest rate adjusted', {
           oldRate: currentRate,
           newRate: newRate,
           policyType: policyType,
           rationale: rationale
         });
-        
+
         return {
           changed: true,
           oldRate: currentRate,
@@ -530,13 +530,13 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
           rationale: rationale
         };
       }
-      
+
       return {
         changed: false,
         currentRate: currentRate,
         rationale: rationale
       };
-      
+
     } catch (error) {
       structuredLog.error('Failed to adjust interest rates', {
         error: error.message,
@@ -552,11 +552,11 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
   async broadcastAnnouncement(message) {
     try {
       const guilds = this.client.guilds.cache;
-      
+
       for (const [guildId, guild] of guilds) {
         try {
           // Find a general channel to post in
-          const channel = guild.channels.cache.find(ch => 
+          const channel = guild.channels.cache.find(ch =>
             ch.type === 0 && // Text channel
             (ch.name.includes('general') || ch.name.includes('main') || ch.name.includes('chat')) &&
             ch.permissionsFor(guild.members.me).has(['SendMessages', 'ViewChannel'])
@@ -564,15 +564,15 @@ The Federal GarryCoin Reserve has ${direction} the base lending rate from ${rate
 
           if (channel) {
             await channel.send(message);
-            structuredLog.info('FGR announcement sent', { 
-              guildId, 
-              channelId: channel.id 
+            structuredLog.info('FGR announcement sent', {
+              guildId,
+              channelId: channel.id
             });
           }
         } catch (error) {
-          structuredLog.warn('Failed to send FGR announcement to guild', { 
-            guildId, 
-            error: error.message 
+          structuredLog.warn('Failed to send FGR announcement to guild', {
+            guildId,
+            error: error.message
           });
         }
       }

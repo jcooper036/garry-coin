@@ -316,8 +316,9 @@ async function processRoundResults(gameId, client) {
                     const min = Math.min(prevCard.value, prevCard2.value);
                     const max = Math.max(prevCard.value, prevCard2.value);
                     const isInside = outcomeCard.value > min && outcomeCard.value < max;
+                    const isOutside = outcomeCard.value > max && outcomeCard.value < min;
                     correct = (choice === 'inside' && isInside) ||
-                        (choice === 'outside' && !isInside);
+                        (choice === 'outside' && isOutside);
                 }
                 break;
             case 'suit':
