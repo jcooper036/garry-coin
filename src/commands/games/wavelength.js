@@ -1,5 +1,6 @@
 const { getActiveWavelengthGame, getUser } = require('../../db');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { formatApproxGC } = require('../../number_formatter');
 const fs = require('fs');
 const path = require('path');
 
@@ -34,7 +35,7 @@ module.exports = {
         const hostUser = await getUser(hostId);
         if (!hostUser || hostUser.balance < wager) {
             return {
-                content: `You're too poor for this game. You only have ${hostUser?.balance || 0} GC.`,
+                content: `You're too poor for this game. You only have ${formatApproxGC(hostUser?.balance || 0)} GC.`,
                 ephemeral: true,
             };
         }

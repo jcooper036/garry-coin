@@ -1,4 +1,5 @@
 const { db, findOrCreateUser } = require('../db');
+const { formatApproxGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garrywallet',
@@ -8,7 +9,7 @@ module.exports = {
     const balance = user ? user.balance : 0;
 
     return {
-      content: `Your wallet balance is ${balance} GarryCoin.`,
+      content: `Your wallet balance is ${formatApproxGC(balance)} GarryCoin.`,
       ephemeral: true,
     };
   },

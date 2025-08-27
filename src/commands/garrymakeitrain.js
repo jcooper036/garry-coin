@@ -1,4 +1,5 @@
 const { db, findOrCreateUser, transfer } = require('../db');
+const { formatExactGC, formatApproxGC } = require('../number_formatter');
 
 function getWeatherMessage(amount, userId, memberCount) {
   const totalCoins = amount * memberCount;
@@ -35,7 +36,7 @@ function getWeatherMessage(amount, userId, memberCount) {
   }
 
   return {
-    announcement: `**${emoji} ${intensity.toUpperCase()} WEATHER EVENT ${emoji}**\n\n<@${userId}> ${weather}! Everyone gets **${amount.toLocaleString()} GC**!\n\n*Total distributed: ${totalCoins.toLocaleString()} GC to ${memberCount} members*`,
+    announcement: `**${emoji} ${intensity.toUpperCase()} WEATHER EVENT ${emoji}**\n\n<@${userId}> ${weather}! Everyone gets **${formatExactGC(amount)} GC**!\n\n*Total distributed: ${formatExactGC(totalCoins)} GC to ${memberCount} members*`,
     emoji,
     intensity
   };
@@ -58,7 +59,7 @@ module.exports = {
 
     if (!sender || sender.balance < totalCost) {
       return {
-        content: `You need **${totalCost.toLocaleString()} GC** to make it rain **${amount.toLocaleString()} GC** on **${eligibleMembers.size}** server members. You only have **${sender?.balance?.toLocaleString() || 0} GC**.`,
+        content: `You need **${formatExactGC(totalCost)} GC** to make it rain **${formatExactGC(amount)} GC** on **${eligibleMembers.size}** server members. You only have **${formatApproxGC(sender?.balance || 0)} GC**.`,
         ephemeral: true,
       };
     }

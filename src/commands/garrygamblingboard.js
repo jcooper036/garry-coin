@@ -1,4 +1,5 @@
 const { getGamblingLeaderboard } = require('../db');
+const { formatExactGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garrygamblingboard',
@@ -41,9 +42,9 @@ module.exports = {
         
         if (boardType === 'profit') {
           const profitSymbol = user.net_profit >= 0 ? '📈' : '📉';
-          content += `${medal} ${mention} - ${profitSymbol} ${user.net_profit >= 0 ? '+' : ''}${user.net_profit} GC (${user.games_played} games)\n`;
+          content += `${medal} ${mention} - ${profitSymbol} ${user.net_profit >= 0 ? '+' : ''}${formatExactGC(user.net_profit)} GC (${user.games_played} games)\n`;
         } else if (boardType === 'volume') {
-          content += `${medal} ${mention} - ${user.games_played} games (${user.total_wagered} GC wagered)\n`;
+          content += `${medal} ${mention} - ${user.games_played} games (${formatExactGC(user.total_wagered)} GC wagered)\n`;
         } else if (boardType === 'winrate') {
           content += `${medal} ${mention} - ${user.win_rate}% win rate (${user.wins}/${user.games_played})\n`;
         }

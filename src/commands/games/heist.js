@@ -2,6 +2,7 @@
 
 const { findOrCreateUser, getBalance } = require('../../db');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { formatApproxGC, formatExactGC } = require('../../number_formatter');
 
 module.exports = {
   name: 'heist',
@@ -58,13 +59,13 @@ module.exports = {
           );
         
         return {
-          content: `You don't have enough GarryCoins for this heist (you have ${player.balance}, need ${wager}). Would you like to take the coins anyway?`,
+          content: `You don't have enough GarryCoins for this heist (you have ${formatApproxGC(player.balance)}, need ${formatExactGC(wager)}). Would you like to take the coins anyway?`,
           components: [confirmRow],
           ephemeral: true,
         };
       } else {
         return {
-          content: `You don\'t have enough GarryCoins for this heist. Your balance is ${player.balance}.`,
+          content: `You don\'t have enough GarryCoins for this heist. Your balance is ${formatApproxGC(player.balance)}.`,
           ephemeral: true,
         };
       }
@@ -72,7 +73,7 @@ module.exports = {
     
     if (target.balance < wager) {
       return {
-        content: `${targetName} is too poor for this heist. They only have ${target.balance} GarryCoins.`,
+        content: `${targetName} is too poor for this heist. They only have ${formatApproxGC(target.balance)} GarryCoins.`,
         ephemeral: true,
       };
     }
@@ -94,7 +95,7 @@ module.exports = {
       );
 
     return {
-      content: `<@${playerId}> is attempting a heist on ${targetName} for ${wager} GarryCoin!\nChoose a wire to cut. Choose wisely...`,
+      content: `<@${playerId}> is attempting a heist on ${targetName} for ${formatExactGC(wager)} GarryCoin!\nChoose a wire to cut. Choose wisely...`,
       components: [row],
     };
   },

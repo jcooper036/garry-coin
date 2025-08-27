@@ -8,6 +8,7 @@ const {
   getFGRPolicy
 } = require('../db');
 const { structuredLog } = require('../logger');
+const { formatExactGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garryloan',
@@ -28,7 +29,7 @@ module.exports = {
 
       if (amount > 10000000000) {
         return {
-          content: '❌ Loan amount cannot exceed 10,000,000,000 GC.',
+          content: `❌ Loan amount cannot exceed ${formatExactGC(10000000000)} GC.`,
           ephemeral: true,
         };
       }
@@ -91,7 +92,7 @@ module.exports = {
       if (amount > maxLoanAmount) {
         const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
         return {
-          content: `❌ **Loan Application Denied**\n\n**Credit Score:** ${creditScore}\n**Requested Amount:** ${amount} GC\n**Reason:** Loan amount exceeds 50% of ${lenderName}'s balance\n**Max Available:** ${maxLoanAmount} GC`,
+          content: `❌ **Loan Application Denied**\n\n**Credit Score:** ${creditScore}\n**Requested Amount:** ${formatExactGC(amount)} GC\n**Reason:** Loan amount exceeds 50% of ${lenderName}'s balance\n**Max Available:** ${formatExactGC(maxLoanAmount)} GC`,
           ephemeral: true,
         };
       }
@@ -121,11 +122,11 @@ module.exports = {
 
       // Show loan terms with accept/reject buttons
       const termsMessage = `💰 **Loan Terms Preview**\n\n` +
-        `**Principal:** ${amount} GC\n` +
+        `**Principal:** ${formatExactGC(amount)} GC\n` +
         `**Daily Interest Rate:** ${adjustedInterestRate.toFixed(2)}% (compounding)\n` +
         `**Loan Period:** ${loanPeriodDays.toFixed(4)} days\n` +
-        `**Interest Charge:** ${interestAmount} GC\n` +
-        `**Total Due:** ${totalDue} GC\n` +
+        `**Interest Charge:** ${formatExactGC(interestAmount)} GC\n` +
+        `**Total Due:** ${formatExactGC(totalDue)} GC\n` +
         `**Due Date:** ${dueDateString} EST\n` +
         `**Lender:** ${lenderName}\n` +
         `**Repayment Period:** ${repaymentPeriod}\n\n` +

@@ -1,6 +1,6 @@
 const { getActiveBusGame, getUser } = require('../../db');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { formatExactGC } = require('../../number_formatter');
+const { formatExactGC, formatApproxGC } = require('../../number_formatter');
 
 module.exports = {
     name: 'garryridethebus',
@@ -37,7 +37,7 @@ module.exports = {
         const hostUser = await getUser(hostId);
         if (!hostUser || hostUser.balance < wager) {
             return {
-                content: `You're too poor for this bus. You only have ${hostUser?.balance || 0} GC.`,
+                content: `You're too poor for this bus. You only have ${formatApproxGC(hostUser?.balance || 0)} GC.`,
                 ephemeral: true,
             };
         }

@@ -1,4 +1,5 @@
 const { findOrCreateUser, transfer } = require('../db');
+const { formatExactGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garrysend',
@@ -21,7 +22,7 @@ module.exports = {
 
     if (result.success) {
       return {
-        content: `Successfully sent ${amount} GarryCoin to <@${receiverId}>.`,
+        content: `Successfully sent ${formatExactGC(amount)} GarryCoin to <@${receiverId}>.`,
         ephemeral: true,
       };
     } else {

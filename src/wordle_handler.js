@@ -1,5 +1,6 @@
 const { processWordleTransaction, getUser } = require('./db');
 const { structuredLog } = require('./logger');
+const { formatExactGC } = require('./number_formatter');
 
 const REWARD_STRUCTURE_PERCENT = {
     1: 20,
@@ -121,10 +122,10 @@ async function handleWordleMessage(message) {
         
         if (winners.length === 1) {
             const winner = winners[0];
-            reportLines.push(`<@${winner.userId}> ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${winner.amount} GC (${rewardPercent}% of balance)`);
+            reportLines.push(`<@${winner.userId}> ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${formatExactGC(winner.amount)} GC (${rewardPercent}% of balance)`);
         } else {
             // Group multiple winners, show individual amounts
-            const winnerDetails = winners.map(w => `<@${w.userId}> (${w.amount} GC)`).join(', ');
+            const winnerDetails = winners.map(w => `<@${w.userId}> (${formatExactGC(w.amount)} GC)`).join(', ');
             reportLines.push(`${winnerDetails} ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries (${rewardPercent}% of balance each)`);
         }
     }
@@ -139,9 +140,9 @@ async function handleWordleMessage(message) {
     if (cheaters.length > 0) {
         if (cheaters.length === 1) {
             const cheater = cheaters[0];
-            reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} <@${cheater.userId}> Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offender has been fined ${cheater.amount} GC (${CHEAT_PENALTY_PERCENT}% of balance)`);
+            reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} <@${cheater.userId}> Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offender has been fined ${formatExactGC(cheater.amount)} GC (${CHEAT_PENALTY_PERCENT}% of balance)`);
         } else {
-            const cheaterDetails = cheaters.map(c => `<@${c.userId}> (${c.amount} GC)`).join(', ');
+            const cheaterDetails = cheaters.map(c => `<@${c.userId}> (${formatExactGC(c.amount)} GC)`).join(', ');
             reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} ${cheaterDetails} Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offenders have been fined ${CHEAT_PENALTY_PERCENT}% of balance each`);
         }
     }

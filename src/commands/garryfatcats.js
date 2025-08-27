@@ -1,4 +1,5 @@
 const { getTopUsersByBalance } = require('../db');
+const { formatApproxGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garryfatcats',
@@ -45,7 +46,7 @@ module.exports = {
         const balance = user.balance;
         const balanceEmoji = balance >= 1000 ? '💎' : balance >= 500 ? '💰' : balance >= 100 ? '🟡' : '🪙';
         
-        content += `${medal} ${mention} - ${balanceEmoji} ${balance} GC\n`;
+        content += `${medal} ${mention} - ${balanceEmoji} ${formatApproxGC(balance)} GC\n`;
       });
 
       content += `\n_Living the high life! 🎩_`;

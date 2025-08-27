@@ -7,6 +7,7 @@ const { findOrCreateUser, transfer, updateUserActivity, getUser, getActiveBusGam
 const { startJoinTimer, handlePlayerChoice, buildGameEmbed } = require('./commands/games/ride_the_bus/ridethebus_helpers');
 const { endWavelengthGame, startWavelengthTimer } = require('./commands/games/wavelength/wavelength_helpers');
 const { structuredLog } = require('./logger');
+const { formatExactGC, formatApproxGC } = require('./number_formatter');
 const connectionWarmer = require('./connection_warmer');
 const fs = require('fs');
 const path = require('path');
@@ -483,15 +484,15 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 • Current Base Interest Rate: ${currentInterestRate.toFixed(2)}%
 
 **Market Overview:**
-• Total GarryCoin Supply: ${metrics.economicMetrics.totalSupply.toLocaleString()} GC
+• Total GarryCoin Supply: ${formatExactGC(metrics.economicMetrics.totalSupply)} GC
 • Active Market Participants: ${metrics.userMetrics.activeUsers}/${metrics.userMetrics.totalUsers} (${metrics.userMetrics.activityRate.toFixed(1)}% participation rate)
 • 24hr Transaction Volume: ${metrics.economicMetrics.recentTransactionVolume} transactions
-• Weekly Gambling Volume: ${metrics.economicMetrics.weeklyGamblingVolume.toLocaleString()} GC
+• Weekly Gambling Volume: ${formatExactGC(metrics.economicMetrics.weeklyGamblingVolume)} GC
 
 **Sectoral Performance:**
 • Heist Market: ${metrics.gameMetrics.heist.games} transactions, ${metrics.gameMetrics.heist.winRate.toFixed(1)}% success rate
-• RTB Securities: ${metrics.gameMetrics.rtb.games} games, avg wager ${metrics.gameMetrics.rtb.avgWager.toFixed(1)} GC
-• Wavelength Derivatives: ${metrics.gameMetrics.wavelength.games} positions, avg exposure ${metrics.gameMetrics.wavelength.avgWager.toFixed(1)} GC
+• RTB Securities: ${metrics.gameMetrics.rtb.games} games, avg wager ${formatExactGC(metrics.gameMetrics.rtb.avgWager)} GC
+• Wavelength Derivatives: ${metrics.gameMetrics.wavelength.games} positions, avg exposure ${formatExactGC(metrics.gameMetrics.wavelength.avgWager)} GC
 
 **Recent FGR Actions:**`;
 
@@ -725,7 +726,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
               });
               const lenderDisplay = loan.lender_user_id === client.user.id ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
 
-              report += `**Loan #${loan.id}** - ${loan.amount} GC @ ${loan.interest_rate}% daily (compounding)\n   Due: ${dueDateString} EST (${totalDue} GC total)\n   Lender: ${lenderDisplay}\n`;
+              report += `**Loan #${loan.id}** - ${formatExactGC(loan.amount)} GC @ ${loan.interest_rate}% daily (compounding)\n   Due: ${dueDateString} EST (${formatExactGC(totalDue)} GC total)\n   Lender: ${lenderDisplay}\n`;
             }
             report += `\n*Interest amounts shown are simple interest estimates. Actual charges use daily compounding.*\n\n`;
           }
@@ -837,7 +838,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
           if (requestedAmount > maxLoanAmount) {
             const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
-            throw new Error(`Loan amount now exceeds 50% of ${lenderName}'s balance. Max available: ${maxLoanAmount} GC`);
+            throw new Error(`Loan amount now exceeds 50% of ${lenderName}'s balance. Max available: ${formatExactGC(maxLoanAmount)} GC`);
           }
 
           // Recalculate interest rate with current conditions
@@ -885,7 +886,7 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
 
           const lenderName = lenderId === client.user.id ? 'GarryCoin Bot' : `<@${lenderId}>`;
 
-          const successMessage = `✅ **Loan Approved!**\n\n**Loan ID:** #${loanResult.loan.id}\n**Principal:** ${requestedAmount} GC\n**Daily Interest Rate:** ${finalInterestRate.toFixed(2)}% (compounding)\n**Loan Period:** ${loanPeriodDays.toFixed(4)} days\n**Interest Charge:** ${interestAmount} GC\n**Total Due:** ${totalDue} GC\n**Due Date:** ${dueDateString} EST\n**Lender:** ${lenderName}\n\n💳 **Your Credit Score:** ${creditScore}\n\nThe loan amount has been deposited into your account. Payment will be automatically deducted in ${repaymentPeriod}.`;
+          const successMessage = `✅ **Loan Approved!**\n\n**Loan ID:** #${loanResult.loan.id}\n**Principal:** ${formatExactGC(requestedAmount)} GC\n**Daily Interest Rate:** ${finalInterestRate.toFixed(2)}% (compounding)\n**Loan Period:** ${loanPeriodDays.toFixed(4)} days\n**Interest Charge:** ${formatExactGC(interestAmount)} GC\n**Total Due:** ${formatExactGC(totalDue)} GC\n**Due Date:** ${dueDateString} EST\n**Lender:** ${lenderName}\n\n💳 **Your Credit Score:** ${creditScore}\n\nThe loan amount has been deposited into your account. Payment will be automatically deducted in ${repaymentPeriod}.`;
 
           await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
             method: 'PATCH',
@@ -956,17 +957,17 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
           if (isEarlyRepayment) {
             const dailyInterest = loan.amount * (loan.interest_rate / 100);
             const penalty = Math.ceil(dailyInterest * 0.25);
-            repaymentType = `⚡ **Early Repayment** (${hoursElapsed.toFixed(1)}h old)\n📋 Penalty: ${penalty} GC (25% of daily interest)\n`;
+            repaymentType = `⚡ **Early Repayment** (${hoursElapsed.toFixed(1)}h old)\n📋 Penalty: ${formatExactGC(penalty)} GC (25% of daily interest)\n`;
           }
 
           const lenderName = loan.lender_user_id === client.user.id ? 'GarryCoin Bot' : `<@${loan.lender_user_id}>`;
 
           const confirmationMessage = `💸 **Loan Repayment Confirmation**\n\n` +
             `🏦 **Loan #${loan.id}** from ${lenderName}\n` +
-            `💰 Principal: ${loan.amount} GC\n` +
+            `💰 Principal: ${formatExactGC(loan.amount)} GC\n` +
             `📊 Interest Rate: ${loan.interest_rate}%/day\n` +
             `${repaymentType}` +
-            `💵 **Total Amount Due: ${amountDue} GC**\n\n` +
+            `💵 **Total Amount Due: ${formatExactGC(amountDue)} GC**\n\n` +
             `Are you sure you want to repay this loan?`;
 
           const row = new ActionRowBuilder()

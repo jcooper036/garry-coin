@@ -7,6 +7,7 @@ const {
 const { llmService } = require('../llm_service');
 const { structuredLog } = require('../logger');
 const { releaseFilesInvestigator } = require('../release_files_investigator');
+const { formatExactGC, formatApproxGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garryreleasethefiles',
@@ -45,7 +46,7 @@ module.exports = {
         const user = await findOrCreateUser(userId);
         if (user.balance < bribeAmount) {
           return {
-            content: `💰 **INSUFFICIENT BRIBE FUNDS!** You need ${bribeAmount} GC but only have ${user.balance} GC. The investigation cannot be... influenced.`,
+            content: `💰 **INSUFFICIENT BRIBE FUNDS!** You need ${formatExactGC(bribeAmount)} GC but only have ${formatApproxGC(user.balance)} GC. The investigation cannot be... influenced.`,
             ephemeral: true
           };
         }

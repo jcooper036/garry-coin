@@ -1,4 +1,5 @@
 const { getGamblingStats, findOrCreateUser } = require('../db');
+const { formatExactGC } = require('../number_formatter');
 
 module.exports = {
   name: 'garrygamblingstats',
@@ -39,17 +40,17 @@ module.exports = {
       
       // Overall Stats
       content += `**📊 Overall Performance**\n`;
-      content += `• **Total Wagered:** ${overall.totalWagered} GC\n`;
-      content += `• **Total Won:** ${overall.totalWon} GC\n`;
-      content += `• **Net Profit:** ${profitSymbol} ${overall.netProfit >= 0 ? '+' : ''}${overall.netProfit} GC\n`;
+      content += `• **Total Wagered:** ${formatExactGC(overall.totalWagered)} GC\n`;
+      content += `• **Total Won:** ${formatExactGC(overall.totalWon)} GC\n`;
+      content += `• **Net Profit:** ${profitSymbol} ${overall.netProfit >= 0 ? '+' : ''}${formatExactGC(overall.netProfit)} GC\n`;
       content += `• **Games Played:** ${overall.gamesPlayed}\n`;
       content += `• **Win Rate:** ${overall.winRate.toFixed(1)}% (${overall.wins}/${overall.gamesPlayed})\n`;
-      content += `• **Avg Wager:** ${overall.avgWager.toFixed(1)} GC\n\n`;
+      content += `• **Avg Wager:** ${formatExactGC(overall.avgWager.toFixed(1))} GC\n\n`;
       
       // Advanced Stats
       content += `**🏆 Records & Streaks**\n`;
-      content += `• **Biggest Win:** ${overall.biggestWin} GC\n`;
-      content += `• **Biggest Loss:** ${overall.biggestLoss} GC\n`;
+      content += `• **Biggest Win:** ${formatExactGC(overall.biggestWin)} GC\n`;
+      content += `• **Biggest Loss:** ${formatExactGC(overall.biggestLoss)} GC\n`;
       content += `• **Current Streak:** ${streakSymbol} ${overall.currentStreak} ${overall.currentStreakType}${overall.currentStreak > 1 ? 's' : ''}\n\n`;
       
       // Per-Game Breakdown
@@ -70,8 +71,8 @@ module.exports = {
         
         content += `${gameDisplayName}\n`;
         content += `  • Games: ${gameData.games} | Win Rate: ${gameWinRate.toFixed(1)}%\n`;
-        content += `  • Wagered: ${gameData.wagered} | Won: ${gameData.won}\n`;
-        content += `  • Profit: ${gameProfitSymbol} ${gameProfit >= 0 ? '+' : ''}${gameProfit} GC\n\n`;
+        content += `  • Wagered: ${formatExactGC(gameData.wagered)} | Won: ${formatExactGC(gameData.won)}\n`;
+        content += `  • Profit: ${gameProfitSymbol} ${gameProfit >= 0 ? '+' : ''}${formatExactGC(gameProfit)} GC\n\n`;
       }
 
       // Add a cheeky message if the user is losing badly
