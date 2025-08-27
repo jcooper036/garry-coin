@@ -1,15 +1,15 @@
-const { processWordleTransaction } = require('./db');
+const { processWordleTransaction, getUser } = require('./db');
 const { structuredLog } = require('./logger');
 
-const REWARD_STRUCTURE = {
-    1: 1000,
-    2: 100,
-    3: 50,
-    4: 20,
-    5: 10,
-    6: 10,
+const REWARD_STRUCTURE_PERCENT = {
+    1: 20,
+    2: 10,
+    3: 5,
+    4: 2,
+    5: 1,
+    6: 1,
 };
-const CHEAT_PENALTY = 40;
+const CHEAT_PENALTY_PERCENT = 4;
 const CHEAT_CHANCE = 0.2;
 
 const CHEATER_EMOJIS = ['<:scumbagcharles:707302898869993523>', '🚔', '🚨', '👮', '⚖️', '<:urfuckendeadkiddo:706647683183411362>', '<:buaGarry:705932743158005771>', '<:megacoop:707305419348901919>', '🙅‍♂️'];
@@ -51,28 +51,44 @@ async function handleWordleMessage(message) {
         const { tries } = results[userId];
         const isCheater = Math.random() < CHEAT_CHANCE;
 
+        // Get user's current balance for percentage calculation
+        const user = await getUser(userId);
+        const actualBalance = user?.balance || 0;
+        // Always treat users as having minimum 10 GC for Wordle calculations
+        const calculationBalance = Math.max(actualBalance, 10);
+
         let finalAmount = 0;
         let transactionType = '';
         let finalTries = tries;
 
         if (isCheater) {
-            finalAmount = -CHEAT_PENALTY;
+            // 4% penalty of calculation balance (minimum 10), rounded up
+            const penaltyPercent = CHEAT_PENALTY_PERCENT / 100;
+            finalAmount = -Math.ceil(calculationBalance * penaltyPercent);
             transactionType = 'wordle_cheat_fine';
-            cheaters.push(userId);
+            cheaters.push({ userId, amount: Math.abs(finalAmount) });
             structuredLog.wordle('User flagged as cheater', {
                 userId,
-                penalty: CHEAT_PENALTY
+                actualBalance,
+                calculationBalance,
+                penaltyPercent: CHEAT_PENALTY_PERCENT,
+                penalty: Math.abs(finalAmount)
             });
         } else if (tries) { // Solved
-            finalAmount = REWARD_STRUCTURE[tries] || 0;
+            // Percentage of calculation balance (minimum 10) reward, rounded up
+            const rewardPercent = (REWARD_STRUCTURE_PERCENT[tries] || 0) / 100;
+            finalAmount = Math.ceil(calculationBalance * rewardPercent);
             transactionType = 'wordle_reward';
             if (!winnersByTries[tries]) {
                 winnersByTries[tries] = [];
             }
-            winnersByTries[tries].push(userId);
+            winnersByTries[tries].push({ userId, amount: finalAmount });
             structuredLog.wordle('User solved Wordle', {
                 userId,
                 tries,
+                actualBalance,
+                calculationBalance,
+                rewardPercent: REWARD_STRUCTURE_PERCENT[tries],
                 reward: finalAmount
             });
         } else { // Unsolved (X/6)
@@ -81,7 +97,9 @@ async function handleWordleMessage(message) {
             transactionType = 'wordle_unsolved';
             unsolved.push(userId);
             structuredLog.wordle('User did not solve Wordle', {
-                userId
+                userId,
+                actualBalance,
+                calculationBalance
             });
         }
 
@@ -98,9 +116,17 @@ async function handleWordleMessage(message) {
     const reportLines = [];
     // Batch winners by score
     for (const tries in winnersByTries) {
-        const userMentions = winnersByTries[tries].map(id => `<@${id}>`).join(', ');
-        const reward = REWARD_STRUCTURE[tries] || 0;
-        reportLines.push(`${userMentions} ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${reward} GC`);
+        const winners = winnersByTries[tries];
+        const rewardPercent = REWARD_STRUCTURE_PERCENT[tries];
+        
+        if (winners.length === 1) {
+            const winner = winners[0];
+            reportLines.push(`<@${winner.userId}> ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${winner.amount} GC (${rewardPercent}% of balance)`);
+        } else {
+            // Group multiple winners, show individual amounts
+            const winnerDetails = winners.map(w => `<@${w.userId}> (${w.amount} GC)`).join(', ');
+            reportLines.push(`${winnerDetails} ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries (${rewardPercent}% of balance each)`);
+        }
     }
 
     // Unsolved are grouped
@@ -109,10 +135,15 @@ async function handleWordleMessage(message) {
         reportLines.push(`${userMentions} ${getRandomEmoji(UNSOLVED_EMOJIS)} knew too many words today`);
     }
 
-    // Cheaters are grouped
+    // Cheaters are grouped with individual penalty amounts
     if (cheaters.length > 0) {
-        const userMentions = cheaters.map(id => `<@${id}>`).join(', ');
-        reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} ${userMentions}  Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offenders have been finded ${CHEAT_PENALTY} GC`);
+        if (cheaters.length === 1) {
+            const cheater = cheaters[0];
+            reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} <@${cheater.userId}> Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offender has been fined ${cheater.amount} GC (${CHEAT_PENALTY_PERCENT}% of balance)`);
+        } else {
+            const cheaterDetails = cheaters.map(c => `<@${c.userId}> (${c.amount} GC)`).join(', ');
+            reportLines.push(`${getRandomEmoji(CHEATER_EMOJIS)} ${cheaterDetails} Cheating detected by GarrycOinTuringCHeatAudit (GOTCHA) - offenders have been fined ${CHEAT_PENALTY_PERCENT}% of balance each`);
+        }
     }
 
     // 5. Send the public report

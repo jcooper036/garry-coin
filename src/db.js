@@ -158,6 +158,55 @@ async function transferThenGrant(senderId, receiverId, amount, transaction_type)
   });
 }
 
+async function transferThenGrantCapped(senderId, receiverId, amount, transaction_type, grantCapPercent = 10) {
+  if (amount <= 0) {
+    return { success: false, message: 'Amount must be positive.' };
+  }
+  return db.transaction(async trx => {
+    const sender = await findOrCreateUser(senderId);
+    const receiver = await findOrCreateUser(receiverId);
+    
+    if (sender.balance >= amount) {
+      // Transfer the full amount directly within transaction
+      await trx('users').where({ user_id: senderId }).decrement('balance', amount);
+      await trx('users').where({ user_id: receiverId }).increment('balance', amount);
+      await recordTransaction(senderId, receiverId, amount, transaction_type, trx);
+      return {
+        success: true, message: `Transfer/grant successful (${amount} transferred).`
+      };
+    } else {
+      // Send what they do have and grant only up to the cap percentage
+      let transferredAmount = 0;
+      if (sender.balance > 0) {
+        transferredAmount = sender.balance;
+        await trx('users').where({ user_id: senderId }).decrement('balance', sender.balance);
+        await trx('users').where({ user_id: receiverId }).increment('balance', sender.balance);
+        await recordTransaction(senderId, receiverId, sender.balance, transaction_type, trx);
+      }
+      
+      const remainderNeeded = amount - transferredAmount;
+      const maxGrant = Math.floor(amount * grantCapPercent / 100);
+      const actualGrant = Math.min(remainderNeeded, maxGrant);
+      const finalPayout = transferredAmount + actualGrant;
+      
+      if (actualGrant > 0) {
+        await trx('users').where({ user_id: receiverId }).increment('balance', actualGrant);
+        const grantSenderId = transaction_type === 'lottery_grant' ? 'lottery' : 'house';
+        await recordTransaction(grantSenderId, receiverId, actualGrant, transaction_type, trx);
+        structuredLog.warn('Capped money creation via transferThenGrantCapped', {
+          senderId, receiverId, requestedAmount: amount, transferredAmount, grantedAmount: actualGrant, 
+          grantCap: grantCapPercent, finalPayout, transactionType: transaction_type
+        });
+      }
+      return {
+        success: true, 
+        message: `Transfer/grant successful (${transferredAmount} transferred, ${actualGrant} granted, ${finalPayout} total).`,
+        actualAmount: finalPayout
+      };
+    }
+  });
+}
+
 async function recordTransaction(sending_user_id, receiving_user_id, amount, transaction_type, trx) {
   await (trx || db)('transactions').insert({
     sending_user_id,
@@ -456,6 +505,7 @@ module.exports = {
   findOrCreateUser,
   transfer,
   transferThenGrant,
+  transferThenGrantCapped,
   recordTransaction,
   grant,
   updateUserActivity,
