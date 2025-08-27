@@ -8,8 +8,8 @@ module.exports = {
     async execute(interaction, client) {
         const wager = interaction.data.options.find(opt => opt.name === 'wager').value;
         const boardingTimeOption = interaction.data.options.find(opt => opt.name === 'boarding_time');
-        const boardingTime = boardingTimeOption ? boardingTimeOption.value : 30;
-        
+        const boardingTime = boardingTimeOption ? boardingTimeOption.value : 10;
+
         const hostId = interaction.member.user.id;
 
         if (wager <= 0) {
@@ -18,10 +18,10 @@ module.exports = {
                 ephemeral: true,
             };
         }
-        
-        if (boardingTime < 5 || boardingTime > 120) {
+
+        if (boardingTime < 5 || boardingTime > 60) {
             return {
-                content: 'Boarding time must be between 5 and 120 seconds.',
+                content: 'Boarding time must be between 5 and 60 seconds.',
                 ephemeral: true,
             };
         }
@@ -63,7 +63,7 @@ module.exports = {
                     .setLabel('Cancel Bus')
                     .setStyle(ButtonStyle.Danger),
             );
-        
+
         const initialMessage = {
             content: '',
             embeds: [initialEmbed],
