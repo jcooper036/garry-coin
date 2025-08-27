@@ -1,5 +1,6 @@
 const { getActiveBusGame, getUser } = require('../../db');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { formatExactGC } = require('../../number_formatter');
 
 module.exports = {
     name: 'garryridethebus',
@@ -44,11 +45,11 @@ module.exports = {
         const initialEmbed = {
             color: 0xffc107, // Yellow
             title: '🚌 Ride the Bus - Boarding Now!',
-            description: `<@${hostId}> has hailed the bus for a fare of **${wager} GC**!\n\nThe bus departs in **${boardingTime} seconds**.`,
+            description: `<@${hostId}> has hailed the bus for a fare of **${formatExactGC(wager)} GC**!\n\nThe bus departs in **${boardingTime} seconds**.`,
             fields: [
                 { name: '🧑‍🤝‍🧑 On the Bus', value: `<@${hostId}>`, inline: false }
             ],
-            footer: { text: `Wager: ${wager} GC` }
+            footer: { text: `Wager: ${formatExactGC(wager)} GC` }
         };
 
         const row = new ActionRowBuilder()

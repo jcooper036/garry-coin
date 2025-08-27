@@ -1,5 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { db, getBusGame, getBusGamePlayers, getBusGamePlayer, updateBusGame, updateBusGamePlayer, grant, transfer, transferThenGrant, transferThenGrantCapped } = require('../../../db');
+const { formatExactGC, formatApproxGC } = require('../../../number_formatter');
 
 const JOIN_PERIOD_SECONDS = 5;
 const ROUND_TIMER_SECONDS = 15;
@@ -68,7 +69,7 @@ async function startJoinTimer(gameId, client, boardingTime) {
             const channel = await client.channels.fetch(game.channel_id);
             const message = await channel.messages.fetch(game.message_id);
             await message.edit({
-                content: `The bus to nowhere has been cancelled due to an error. The host has been refunded their **${game.wager} GC** fare.`,
+                content: `The bus to nowhere has been cancelled due to an error. The host has been refunded their **${formatExactGC(game.wager)} GC** fare.`,
                 components: [],
             });
         } else {
@@ -178,7 +179,7 @@ async function buildGameEmbed(gameId) {
             { name: `💰 Cashed Out (${cashedOut.length})`, value: cashedOutList, inline: true },
             { name: `💀 Dead in the Road (${dead.length})`, value: deadList, inline: true }
         ],
-        footer: { text: `Game ID: ${game.id} | Wager: ${game.wager} GC` }
+        footer: { text: `Game ID: ${game.id} | Wager: ${formatExactGC(game.wager)} GC` }
     };
 }
 
@@ -380,7 +381,7 @@ async function endGame(gameId, client) {
                 console.log(`[Game ${gameId}] Granting ${winnings} GC to user ${player.user_id} for reaching the end.`);
                 const result = await transferThenGrantCapped(client.user.id, player.user_id, winnings, 'rtb_win_end_of_line');
                 const actualWinnings = result.actualAmount || winnings;
-                summary += `<@${player.user_id}> made it all the way and wins **${actualWinnings} GC**!\n`;
+                summary += `<@${player.user_id}> made it all the way and wins **${formatExactGC(actualWinnings)} GC**!\n`;
             }
             summary += '\n';
         }
@@ -391,7 +392,7 @@ async function endGame(gameId, client) {
                 console.log(`[Game ${gameId}] Transfer/granting ${winnings} GC to user ${player.user_id} for cashing out after ${player.stops_rode} stop(s).`);
                 const result = await transferThenGrantCapped(client.user.id, player.user_id, winnings, `rtb_win_cash_out_${player.stops_rode}`);
                 const actualWinnings = result.actualAmount || winnings;
-                summary += `<@${player.user_id}> got off with **${actualWinnings} GC**.\n`;
+                summary += `<@${player.user_id}> got off with **${formatExactGC(actualWinnings)} GC**.\n`;
             }
             summary += '\n';
         }
