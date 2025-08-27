@@ -53,28 +53,31 @@ async function handleWordleMessage(message) {
 
         // Get user's current balance for percentage calculation
         const user = await getUser(userId);
-        const userBalance = user?.balance || 0;
+        const actualBalance = user?.balance || 0;
+        // Always treat users as having minimum 10 GC for Wordle calculations
+        const calculationBalance = Math.max(actualBalance, 10);
 
         let finalAmount = 0;
         let transactionType = '';
         let finalTries = tries;
 
         if (isCheater) {
-            // 4% penalty of current balance, rounded up
+            // 4% penalty of calculation balance (minimum 10), rounded up
             const penaltyPercent = CHEAT_PENALTY_PERCENT / 100;
-            finalAmount = -Math.ceil(userBalance * penaltyPercent);
+            finalAmount = -Math.ceil(calculationBalance * penaltyPercent);
             transactionType = 'wordle_cheat_fine';
             cheaters.push({ userId, amount: Math.abs(finalAmount) });
             structuredLog.wordle('User flagged as cheater', {
                 userId,
-                balance: userBalance,
+                actualBalance,
+                calculationBalance,
                 penaltyPercent: CHEAT_PENALTY_PERCENT,
                 penalty: Math.abs(finalAmount)
             });
         } else if (tries) { // Solved
-            // Percentage of balance reward, rounded up
+            // Percentage of calculation balance (minimum 10) reward, rounded up
             const rewardPercent = (REWARD_STRUCTURE_PERCENT[tries] || 0) / 100;
-            finalAmount = Math.ceil(userBalance * rewardPercent);
+            finalAmount = Math.ceil(calculationBalance * rewardPercent);
             transactionType = 'wordle_reward';
             if (!winnersByTries[tries]) {
                 winnersByTries[tries] = [];
@@ -83,7 +86,8 @@ async function handleWordleMessage(message) {
             structuredLog.wordle('User solved Wordle', {
                 userId,
                 tries,
-                balance: userBalance,
+                actualBalance,
+                calculationBalance,
                 rewardPercent: REWARD_STRUCTURE_PERCENT[tries],
                 reward: finalAmount
             });
@@ -94,7 +98,8 @@ async function handleWordleMessage(message) {
             unsolved.push(userId);
             structuredLog.wordle('User did not solve Wordle', {
                 userId,
-                balance: userBalance
+                actualBalance,
+                calculationBalance
             });
         }
 

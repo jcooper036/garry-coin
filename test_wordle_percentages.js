@@ -16,21 +16,25 @@ function testPercentageCalculations() {
     console.log('🧪 Testing Wordle percentage-based rewards');
     console.log('');
 
-    const testBalances = [1000, 500, 100, 50, 10, 0];
+    const testBalances = [1000, 500, 100, 50, 10, 5, 0, -20];
     
     for (const balance of testBalances) {
-        console.log(`💰 Testing with ${balance} GC balance:`);
+        // Apply minimum 10 GC calculation balance
+        const calculationBalance = Math.max(balance, 10);
+        const usingMinimum = calculationBalance > balance;
+        
+        console.log(`💰 Testing with ${balance} GC balance${usingMinimum ? ' (calculated as 10 GC)' : ''}:`);
         
         // Test all solve attempts
         for (const tries of [1, 2, 3, 4, 5, 6]) {
             const rewardPercent = REWARD_STRUCTURE_PERCENT[tries] / 100;
-            const reward = Math.ceil(balance * rewardPercent);
+            const reward = Math.ceil(calculationBalance * rewardPercent);
             console.log(`  ${tries} tries: ${REWARD_STRUCTURE_PERCENT[tries]}% → ${reward} GC`);
         }
         
         // Test cheating penalty
         const penaltyPercent = CHEAT_PENALTY_PERCENT / 100;
-        const penalty = Math.ceil(balance * penaltyPercent);
+        const penalty = Math.ceil(calculationBalance * penaltyPercent);
         console.log(`  Cheat penalty: ${CHEAT_PENALTY_PERCENT}% → -${penalty} GC`);
         console.log('');
     }
@@ -38,9 +42,10 @@ function testPercentageCalculations() {
     console.log('📊 Key improvements:');
     console.log('  • Rewards scale with user wealth (no fixed inflation)');
     console.log('  • Rich players get bigger rewards but proportional to their wealth');
-    console.log('  • Poor players get smaller but still meaningful rewards');
+    console.log('  • EVERYONE gets meaningful rewards (minimum 10 GC calculation base)');
+    console.log('  • Broke/negative players still get 2 GC for 1-try, 1 GC for others');
     console.log('  • Cheating penalty scales with wealth (bigger deterrent for wealthy)');
-    console.log('  • Math.ceil ensures minimum 1 GC reward for any non-zero balance');
+    console.log('  • Math.ceil ensures proper rounding up of percentages');
     console.log('');
 
     console.log('🎯 Economic benefits:');
