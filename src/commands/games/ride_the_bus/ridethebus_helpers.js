@@ -112,9 +112,15 @@ function startPhaseTimer(gameId, client) {
         clearTimeout(activeTimers.get(gameId));
     }
 
-    const timerId = setTimeout(() => {
+    const timerId = setTimeout(async () => {
         console.log(`[Game ${gameId}] Round timer expired. Processing results.`);
-        processRoundResults(gameId, client);
+        const nextAction = await processRoundResults(gameId, client);
+        // Handle any post-transaction actions
+        if (nextAction?.nextAction === 'endGame') {
+            await endGame(gameId, client);
+        } else if (nextAction?.nextAction === 'startNextPhase') {
+            await startNextPhase(gameId, nextAction.nextPhase, client);
+        }
         activeTimers.delete(gameId);
     }, ROUND_TIMER_SECONDS * 1000);
 
@@ -122,16 +128,32 @@ function startPhaseTimer(gameId, client) {
 }
 
 async function checkAndProcessRound(gameId, client) {
-    const onBusPlayers = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' });
-    const allChosen = onBusPlayers.every(p => p.current_choice !== null);
+    // Use database transaction with row-level locking to prevent race conditions
+    const nextAction = await db.transaction(async (trx) => {
+        // Lock bus_game_players rows for this game to prevent concurrent modifications
+        const onBusPlayers = await trx('bus_game_players')
+            .where({ game_id: gameId, player_status: 'on_bus' })
+            .forUpdate();
+        
+        const allChosen = onBusPlayers.every(p => p.current_choice !== null);
 
-    if (onBusPlayers.length > 0 && allChosen) {
-        console.log(`[Game ${gameId}] All players have made a choice. Processing results immediately.`);
-        if (activeTimers.has(gameId)) {
-            clearTimeout(activeTimers.get(gameId));
-            activeTimers.delete(gameId);
+        if (onBusPlayers.length > 0 && allChosen) {
+            console.log(`[Game ${gameId}] All players have made a choice. Processing results immediately.`);
+            if (activeTimers.has(gameId)) {
+                clearTimeout(activeTimers.get(gameId));
+                activeTimers.delete(gameId);
+            }
+            // Process results within the same transaction to maintain atomicity
+            return await processRoundResults(gameId, client, trx);
         }
-        await processRoundResults(gameId, client);
+        return null;
+    });
+
+    // Handle any post-transaction actions (Discord interactions)
+    if (nextAction?.nextAction === 'endGame') {
+        await endGame(gameId, client);
+    } else if (nextAction?.nextAction === 'startNextPhase') {
+        await startNextPhase(gameId, nextAction.nextPhase, client);
     }
 }
 
@@ -273,7 +295,10 @@ async function handlePlayerChoice(interaction, client) {
 }
 
 
-async function processRoundResults(gameId, client) {
+async function processRoundResults(gameId, client, trx = null) {
+    // Use provided transaction or create a new one
+    const dbInstance = trx || db;
+    
     // Ensure the timer is cleared so it doesn't run twice
     if (activeTimers.has(gameId)) {
         clearTimeout(activeTimers.get(gameId));
@@ -330,24 +355,52 @@ async function processRoundResults(gameId, client) {
 
         if (correct) {
             console.log(`[Game ${gameId}] Player ${player.user_id} was CORRECT.`);
-            await updateBusGamePlayer(gameId, player.user_id, { stops_rode: player.stops_rode + 1, current_choice: null });
+            // Use transaction if available, otherwise fall back to updateBusGamePlayer
+            if (trx) {
+                await trx('bus_game_players')
+                    .where({ game_id: gameId, user_id: player.user_id })
+                    .update({ stops_rode: player.stops_rode + 1, current_choice: null });
+            } else {
+                await updateBusGamePlayer(gameId, player.user_id, { stops_rode: player.stops_rode + 1, current_choice: null });
+            }
         } else {
             console.log(`[Game ${gameId}] Player ${player.user_id} was INCORRECT or did not choose.`);
-            await updateBusGamePlayer(gameId, player.user_id, { player_status: 'dead_in_road', current_choice: null });
+            // Use transaction if available, otherwise fall back to updateBusGamePlayer
+            if (trx) {
+                await trx('bus_game_players')
+                    .where({ game_id: gameId, user_id: player.user_id })
+                    .update({ player_status: 'dead_in_road', current_choice: null });
+            } else {
+                await updateBusGamePlayer(gameId, player.user_id, { player_status: 'dead_in_road', current_choice: null });
+            }
         }
     }
 
     // Add the revealed card to the sequence
     const allCards = [...game.current_cards, outcomeCard];
-    await updateBusGame(gameId, { current_cards: JSON.stringify(allCards) });
+    if (trx) {
+        await trx('bus_games')
+            .where({ id: gameId })
+            .update({ current_cards: JSON.stringify(allCards) });
+    } else {
+        await updateBusGame(gameId, { current_cards: JSON.stringify(allCards) });
+    }
 
     const nextPhase = Phases[game.current_phase].next;
-    const stillOnBus = await db('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' });
+    const stillOnBus = await dbInstance('bus_game_players').where({ game_id: gameId, player_status: 'on_bus' });
 
-    if (!nextPhase || stillOnBus.length === 0) {
-        await endGame(gameId, client);
+    // If we're in a transaction, we need to commit it before calling endGame or startNextPhase
+    // since those functions interact with Discord and should not hold database locks
+    if (trx) {
+        // We're inside a transaction - return the next action to be performed after commit
+        return { nextAction: !nextPhase || stillOnBus.length === 0 ? 'endGame' : 'startNextPhase', nextPhase };
     } else {
-        await startNextPhase(gameId, nextPhase, client);
+        // We're not in a transaction - proceed normally
+        if (!nextPhase || stillOnBus.length === 0) {
+            await endGame(gameId, client);
+        } else {
+            await startNextPhase(gameId, nextPhase, client);
+        }
     }
 }
 
