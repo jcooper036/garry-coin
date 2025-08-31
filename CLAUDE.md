@@ -173,6 +173,14 @@ Complete redesign of Release The Files investigation system with comprehensive a
 - **Discord UX Polish**: Automatic conversion of raw user IDs to proper Discord mentions for clickable, highlighted usernames
 - **Evidence Balance System**: Prioritizes database evidence (0-2 points) over codebase evidence (1 point) with comprehensive logging for debugging and bias direction tracking
 
+### 2025-08-31: RTB Race Condition Fix & Transaction Isolation
+Critical bug fix for Ride the Bus game race condition causing duplicate round processing:
+- **Race Condition Analysis**: Identified production logs showing duplicate round processing when multiple players clicked simultaneously, causing multiple cards to be drawn and contradictory game results
+- **Transaction Lock Implementation**: Implemented database-level concurrency control using PostgreSQL row-level locking (`forUpdate()`) in `checkAndProcessRound()` function to serialize access to player choice validation
+- **Atomic Processing**: Refactored `processRoundResults()` to accept optional transaction parameter, ensuring all game state updates occur atomically within the locked transaction
+- **Post-Transaction Action Pattern**: Separated Discord I/O operations (`endGame`, `startNextPhase`) from database transactions to prevent holding locks during external API calls
+- **Timer Consistency**: Updated round timeout handlers to maintain transaction-safe processing patterns
+
 ## Dev Topics
 
 ### Database Architecture & Performance
