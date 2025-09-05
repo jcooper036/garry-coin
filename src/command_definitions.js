@@ -354,6 +354,10 @@ const commands = [
         max_value: 100000
       },
     ],
+  },
+  {
+    name: 'garrycatchapredator',
+    description: '🕵️ Expose Wordle cheating statistics and catch the cheaters red-handed!'
   }
 ];
 
