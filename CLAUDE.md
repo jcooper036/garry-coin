@@ -181,6 +181,14 @@ Critical bug fix for Ride the Bus game race condition causing duplicate round pr
 - **Post-Transaction Action Pattern**: Separated Discord I/O operations (`endGame`, `startNextPhase`) from database transactions to prevent holding locks during external API calls
 - **Timer Consistency**: Updated round timeout handlers to maintain transaction-safe processing patterns
 
+### 2025-12-28: FGR Automated Interventions Deprecation
+Disabled automated Federal GarryCoin Reserve intervention system for clean removal:
+- **Scope**: Removed only automated FGREvents scheduler that posted "EMERGENCY MONETARY ACTION" announcements (`src/fgr_events.js`, `src/bot.js:34-36`)
+- **Preserved Features**: User-facing commands (`/garryreservereport`, `/garryreservevote`) remain active, along with supporting infrastructure (FGRContext, database functions)
+- **Deprecation Strategy**: Commented out initialization in `src/bot.js`, marked `src/fgr_events.js`, `src/fgr_cli.js`, and `src/fgr_context.js` as deprecated with removal notes
+- **Monitoring Period**: Added TODO item (2025-12-28) to monitor for ~1 week before final code removal
+- **Documentation Updates**: Added deprecation notices to `docs/Economic_Policy.md` noting automated interventions disabled but user commands still functional
+
 ## Dev Topics
 
 ### Database Architecture & Performance
