@@ -1,3 +1,4 @@
+// DEPRECATED - all to be removed with FGREvent TODO remove item
 const {
   getEconomicMetrics,
   getGamblingLeaderboard,
