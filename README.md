@@ -36,7 +36,7 @@ Unless stated otherwise, all responses are private to the user. "ephemeral" vs "
 ### Completed
 #### Features
 - leader boards for gambling games
-- Federal GarryCoin Reserve (FGR)
+- Federal GarryCoin Reserve (FGR) - ⚠️ Automated interventions deprecated 2025-12-28, user commands remain active
 - GarryCoin loan system with credit scores
 #### Bug fixes
 - hardened database pooling timeouts

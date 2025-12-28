@@ -1,5 +1,7 @@
 # Federal GarryCoin Reserve - Economic Policy Framework
 
+> **⚠️ DEPRECATED (2025-12-28)**: The automated FGR intervention system has been disabled and will be removed after monitoring period. User-facing commands (`/garryreservereport`, `/garryreservevote`) remain active. See TODO.md for removal timeline.
+
 ## Overview
 
 The Federal GarryCoin Reserve (FGR) operates as an autonomous monetary authority within the GarryCoin ecosystem, implementing various economic interventions designed to maintain market stability and maximize economic absurdity. This document outlines the policy tools, trigger conditions, and operational parameters of the FGR system.

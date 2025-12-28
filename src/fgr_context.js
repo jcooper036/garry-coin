@@ -1,3 +1,4 @@
+// DEPRECATED - remove with FGR Events TODO item
 const { 
   getEconomicMetrics, 
   getFGREvents,

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// DEPRECATED! Remove with the FGR Event remove TODO item
 
 const { FGREvents } = require('./fgr_events');
 const { getEconomicMetrics, recordFGREvent } = require('./db');
