@@ -28,9 +28,43 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
   try {
     console.log('Started refreshing application (/) commands.');
 
+    // Fetch existing commands
+    const existingCommands = await rest.get(Routes.applicationCommands(APP_ID));
+    console.log(`Found ${existingCommands.length} existing commands.`);
+
+    // Find ALL Entry Point commands
+    const entryPointCommands = existingCommands.filter(cmd =>
+      cmd.integration_types || cmd.contexts
+    );
+
+    if (entryPointCommands.length > 0) {
+      console.log(`Found ${entryPointCommands.length} Entry Point command(s):`);
+      entryPointCommands.forEach(cmd => {
+        console.log(`  - ${cmd.name} (id: ${cmd.id})`);
+      });
+    }
+
+    // Log all command names to see what we have
+    console.log('All existing commands:', existingCommands.map(cmd => cmd.name).join(', '));
+
+    // Find commands that exist in Discord but not in our definitions
+    const ourCommandNames = commands.map(cmd => cmd.name);
+    const missingCommands = existingCommands.filter(cmd =>
+      !ourCommandNames.includes(cmd.name)
+    );
+
+    if (missingCommands.length > 0) {
+      console.log(`Preserving ${missingCommands.length} Discord-managed command(s):`);
+      missingCommands.forEach(cmd => console.log(`  - ${cmd.name}`));
+    }
+
+    // Combine our commands with Discord-managed ones
+    const allCommands = [...commands, ...missingCommands];
+
+    // Register all commands
     await rest.put(
       Routes.applicationCommands(APP_ID),
-      { body: commands },
+      { body: allCommands },
     );
 
     console.log('Successfully reloaded application (/) commands.');

@@ -500,6 +500,49 @@ async function getTopUsersByBalance(limit = 10) {
     .limit(limit));
 }
 
+// --- Financial Advisor Functions ---
+
+async function getRecentUserTransactions(userId, limit = 20) {
+  return withRetry(() =>
+    db('transactions')
+      .where(function() {
+        this.where('sending_user_id', userId).orWhere('receiving_user_id', userId);
+      })
+      .whereNot('transaction_type', 'financial_advisory_fee') // Hide advisor's silent fees
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+  );
+}
+
+async function getPreviousFinancialAdvice(userId, limit = 2) {
+  return withRetry(() =>
+    db('financial_advice')
+      .where({ user_id: userId })
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+  );
+}
+
+async function recordFinancialAdvice(userId, adviceType, adviceItem, fullText) {
+  return withRetry(() =>
+    db('financial_advice').insert({
+      user_id: userId,
+      advice_type: adviceType,
+      advice_item: adviceItem,
+      advice_full_text: fullText
+    }).returning('*')
+  );
+}
+
+async function getTopBalances(limit = 10) {
+  return withRetry(() =>
+    db('users')
+      .select('user_id', 'balance')
+      .orderBy('balance', 'desc')
+      .limit(limit)
+  );
+}
+
 module.exports = {
   db,
   findOrCreateUser,
@@ -566,6 +609,11 @@ module.exports = {
   addReleaseFilesCodebaseRef,
   getDailyInvestigationLimit,
   getReleaseFilesCaseHistory,
+  // Financial Advisor
+  getRecentUserTransactions,
+  getPreviousFinancialAdvice,
+  recordFinancialAdvice,
+  getTopBalances,
 };
 
 // --- Ride the Bus Functions
