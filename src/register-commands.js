@@ -27,15 +27,53 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
 (async () => {
   try {
     console.log('Started refreshing application (/) commands.');
-    console.log(`Registering ${commands.length} commands...`);
 
-    // Register commands with timeout
+    // Fetch existing commands with timeout
+    console.log('Fetching existing commands from Discord...');
+    const fetchTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Discord API fetch timeout after 30s')), 30000)
+    );
+
+    const existingCommands = await Promise.race([
+      rest.get(Routes.applicationCommands(APP_ID)),
+      fetchTimeout
+    ]);
+    console.log(`Found ${existingCommands.length} existing commands.`);
+
+    // Find Entry Point commands (must be preserved)
+    const entryPointCommands = existingCommands.filter(cmd =>
+      cmd.integration_types || cmd.contexts
+    );
+
+    if (entryPointCommands.length > 0) {
+      console.log(`Preserving ${entryPointCommands.length} Entry Point command(s):`);
+      entryPointCommands.forEach(cmd => {
+        console.log(`  - ${cmd.name} (id: ${cmd.id})`);
+      });
+    }
+
+    // Find commands that exist in Discord but not in our definitions
+    const ourCommandNames = commands.map(cmd => cmd.name);
+    const discordManagedCommands = existingCommands.filter(cmd =>
+      !ourCommandNames.includes(cmd.name)
+    );
+
+    if (discordManagedCommands.length > 0) {
+      console.log(`Preserving ${discordManagedCommands.length} Discord-managed command(s):`);
+      discordManagedCommands.forEach(cmd => console.log(`  - ${cmd.name}`));
+    }
+
+    // Combine our commands with Discord-managed ones
+    const allCommands = [...commands, ...discordManagedCommands];
+
+    // Register all commands with timeout
+    console.log(`Registering ${allCommands.length} total commands...`);
     const putTimeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Discord API timeout after 30s')), 30000)
+      setTimeout(() => reject(new Error('Discord API PUT timeout after 30s')), 30000)
     );
 
     await Promise.race([
-      rest.put(Routes.applicationCommands(APP_ID), { body: commands }),
+      rest.put(Routes.applicationCommands(APP_ID), { body: allCommands }),
       putTimeout
     ]);
 
