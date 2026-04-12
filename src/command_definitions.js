@@ -1,8 +1,5 @@
 const commands = [
-  {
-    name: 'test',
-    description: 'Should return "Hello from the GarryCoin community"'
-  },
+  // Note: 'test' command removed - Discord manages it as an Entry Point command
   {
     name: 'garryhelp',
     description: 'Gives the user the commands they can use.'
@@ -358,6 +355,18 @@ const commands = [
   {
     name: 'garrycatchapredator',
     description: '🕵️ Expose Wordle cheating statistics and catch the cheaters red-handed!'
+  },
+  {
+    name: 'garryfinancialadvisor',
+    description: 'this is financial advice',
+    options: [
+      {
+        name: 'message',
+        description: 'Your financial question or situation (will be ignored)',
+        type: 3, // STRING type
+        required: false
+      }
+    ]
   }
 ];
 

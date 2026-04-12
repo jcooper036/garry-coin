@@ -232,7 +232,7 @@ app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
 
         // For simple commands that don't already use postProcess, defer them
         // Complex commands already have their own deferral logic
-        const alreadyDeferred = ['garrymakeitrain', 'garryreservereport', 'garryloan', 'garrycreditreport', 'ridethebus'].includes(name);
+        const alreadyDeferred = ['garrymakeitrain', 'garryreservereport', 'garryloan', 'garrycreditreport', 'ridethebus', 'garryfinancialadvisor'].includes(name);
 
         if (!alreadyDeferred) {
           structuredLog.info('Auto-deferring command due to pool stress', {
@@ -617,6 +617,54 @@ The FOMC remains data-dependent and will monitor emoji velocity and cross-sectio
         return;
       }
 
+      // Special post-processing for Financial Advisor
+      if (response.postProcess === 'financial_advisor') {
+        // Acknowledge the interaction to prevent timeout
+        res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+
+        try {
+          const command = commands.get('garryfinancialadvisor');
+          let adviceContent = await command.processAdvice(response.interaction, response.client);
+
+          // Discord has a 2000 char limit - truncate if needed
+          if (adviceContent.length > 2000) {
+            structuredLog.warn('Financial advisor response too long, truncating', {
+              originalLength: adviceContent.length
+            });
+            adviceContent = adviceContent.substring(0, 1997) + '...';
+          }
+
+          const patchResponse = await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: adviceContent }),
+          });
+
+          if (!patchResponse.ok) {
+            const errorText = await patchResponse.text();
+            throw new Error(`Discord PATCH failed: ${patchResponse.status} - ${errorText}`);
+          }
+
+          structuredLog.info('Financial advisor response sent', {
+            contentLength: adviceContent.length
+          });
+
+        } catch (error) {
+          structuredLog.error('Financial advisor processing failed', {
+            error: error.message,
+            stack: error.stack
+          });
+
+          await fetch(`https://discord.com/api/v10/webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: 'Something went wrong. Even my algorithms can\'t predict THIS disaster. Try again later.'
+            }),
+          });
+        }
+        return;
+      }
 
       // Special post-processing for credit reports
       if (response.postProcess === 'generate_credit_report') {

@@ -42,10 +42,12 @@ class LLMService {
    * @param {Object} options - Configuration options
    * @param {number} options.timeout - Timeout in milliseconds
    * @param {string} options.fallback - Fallback text if LLM fails
+   * @param {number} options.maxTokens - Maximum output tokens (default 500)
+   * @param {number} options.temperature - Temperature for randomness (default 0.9)
    * @returns {Promise<string>} Generated text or fallback
    */
   async generateText(prompt, options = {}) {
-    const { timeout = this.defaultTimeout, fallback = null } = options;
+    const { timeout = this.defaultTimeout, fallback = null, maxTokens = 500, temperature = 0.9 } = options;
 
     try {
       // Initialize if not already done
@@ -62,9 +64,9 @@ class LLMService {
         contents: prompt,
         config: {
           generationConfig: {
-            temperature: 0.9, // Higher creativity for absurd financial content
+            temperature: temperature,
             topP: 0.95,
-            maxOutputTokens: 500
+            maxOutputTokens: maxTokens
           },
           thinkingConfig: {
             thinkingBudget: 0 // Disable thinking for faster response
