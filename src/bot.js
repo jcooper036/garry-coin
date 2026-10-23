@@ -3,7 +3,6 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const { transfer, grant, updateUserActivity, getRandomActiveUser } = require('./db');
 const { handleWordleMessage } = require('./wordle_handler');
 const { structuredLog } = require('./logger');
-// const { FGREvents } = require('./fgr_events'); // DEPRECATED! To be removed with FGREvent Remove TODO item
 const { LoanScheduler } = require('./loan_scheduler');
 const connectionWarmer = require('./connection_warmer');
 
@@ -30,10 +29,6 @@ client.once('ready', () => {
   
   // Start connection warming to prevent stale connection timeouts
   connectionWarmer.start();
-  
-  // DEPRECATED! To be removed with FGREvent Remove TODO item
-  // const fgrEvents = new FGREvents(client);
-  // fgrEvents.start(); 
   
   // Initialize Loan Payment Scheduler
   const loanScheduler = new LoanScheduler(client);

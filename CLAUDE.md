@@ -189,6 +189,14 @@ Disabled automated Federal GarryCoin Reserve intervention system for clean remov
 - **Monitoring Period**: Added TODO item (2025-12-28) to monitor for ~1 week before final code removal
 - **Documentation Updates**: Added deprecation notices to `docs/Economic_Policy.md` noting automated interventions disabled but user commands still functional
 
+### 2026-10-23: Federal GarryCoin Reserve Removal
+Removed the FGR entirely (feature unused):
+- **Deleted**: `src/fgr_events.js`, `src/fgr_cli.js`, `src/fgr_context.js`, `test_fgr_bailouts.js`, `/garryreservereport` + `/garryreservevote`, `docs/Economic_Policy.md`, `test-fgr-*` npm scripts, db helpers (`*FGR*`, `getEconomicMetrics`)
+- **Schema**: new migration `20261023000000_drop_fgr_tables.js` drops `fgr_events`, `fgr_votes`, `fgr_policies` (original create migration kept for history)
+- **Loans**: base rate is now the constant `BASE_INTEREST_RATE = 5.0` in `src/db.js`; `payLoan` no longer takes `botUserId`, and the FGR bailout is gone: borrowers pay in full (down to the -1,000,000 GC debt ceiling), lender is paid only what was collected, shortfall => `defaulted`. Old `fgr_loan_bailout` transactions still render in `/garryhistory`/`/garryreceipt`.
+- **Removed CLI**: `loan_cli.js set-interest-rate` / `get-interest-rate`
+
+
 ## Dev Topics
 
 ### Database Architecture & Performance
@@ -224,12 +232,12 @@ Disabled automated Federal GarryCoin Reserve intervention system for clean remov
 - **Production**: Render log aggregation, eliminated noisy Knex logs, comprehensive error tracking (2025-08-09)
 - **Health Monitoring**: Real-time pool metrics, database response tracking, stress indicators (2025-08-16)
 
-**Testing Infrastructure**: CLI test suites for complex systems (FGR, loans), comprehensive edge case testing for financial functions.
+**Testing Infrastructure**: CLI test suites for complex systems (loans), comprehensive edge case testing for financial functions.
 
 ### Game Systems & Economics
 **Core Games**: Heist (interactive buttons, dynamic success rates), Ride the Bus (card-based progression), Wavelength (word association), Wordle integration (automated rewards).
 
-**Economic Features**: Federal Reserve system with AI-driven interventions, loan system with credit scoring, gambling statistics with proper data sourcing, progressive penalty systems. The Federal GarryCoin Reserve maintains its reputation for technical accuracy while preserving the delightfully predatory lending practices that make banking so... authentic. 🏦
+**Economic Features**: Loan system with credit scoring, gambling statistics with proper data sourcing, progressive penalty systems. The Federal GarryCoin Reserve maintains its reputation for technical accuracy while preserving the delightfully predatory lending practices that make banking so... authentic. 🏦
 
 **Key Insight**: Game statistics require proper data sources - use game tables for instances, transaction tables for amounts to avoid impossible win rates.
 

@@ -580,15 +580,6 @@ module.exports = {
   getGamblingStats,
   getGamblingLeaderboard,
   getTopUsersByBalance,
-  // Federal GarryCoin Reserve
-  recordFGREvent,
-  getFGREvents,
-  castFGRVote,
-  getFGRVotes,
-  createFGRPolicy,
-  getFGRPolicy,
-  updateFGRPolicy,
-  getEconomicMetrics,
   // Loan System
   calculateCreditScore,
   calculateDebtToAssetRatio,
@@ -811,166 +802,6 @@ async function processWordleTransaction(userId, tries, amount, isCheater, transa
   }));
 }
 
-// --- Federal GarryCoin Reserve Functions ---
-
-async function recordFGREvent(eventType, description, eventData = {}, coinsDistributed = 0, usersAffected = 0) {
-  return withRetry(() => db('fgr_events').insert({
-    event_type: eventType,
-    description,
-    event_data: eventData,
-    coins_distributed: coinsDistributed,
-    users_affected: usersAffected
-  }).returning('*'));
-}
-
-async function getFGREvents(limit = 10) {
-  return withRetry(() => db('fgr_events')
-    .orderBy('created_at', 'desc')
-    .limit(limit));
-}
-
-async function castFGRVote(userId, policyType, voteChoice) {
-  return withRetry(() => db('fgr_votes')
-    .insert({
-      user_id: userId,
-      policy_type: policyType,
-      vote_choice: voteChoice
-    })
-    .onConflict(['policy_type', 'user_id'])
-    .merge(['vote_choice', 'created_at'])
-    .returning('*'));
-}
-
-async function getFGRVotes(policyType) {
-  return withRetry(() => db('fgr_votes')
-    .where({ policy_type: policyType })
-    .orderBy('created_at', 'desc'));
-}
-
-async function createFGRPolicy(policyName, policyData = {}, expiresAt = null) {
-  return withRetry(() => db('fgr_policies').insert({
-    policy_name: policyName,
-    policy_data: policyData,
-    expires_at: expiresAt
-  }).returning('*'));
-}
-
-async function getFGRPolicy(policyName) {
-  return withRetry(() => db('fgr_policies')
-    .where({ policy_name: policyName, status: 'active' })
-    .first());
-}
-
-async function updateFGRPolicy(policyName, updates) {
-  return withRetry(() => db('fgr_policies')
-    .where({ policy_name: policyName })
-    .update(updates));
-}
-
-async function getEconomicMetrics() {
-  return withRetry(async () => {
-    // Get overall gambling metrics for economic analysis
-    const [
-      totalUsers,
-      activeUsers,
-      totalBalance,
-      recentTransactions,
-      gamblingVolume,
-      heistStats,
-      rtbStats,
-      wavelengthStats
-    ] = await Promise.all([
-      // Total registered users
-      db('users').count('* as count').first(),
-
-      // Active users (last 7 days)
-      db('users')
-        .where('last_active_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-        .count('* as count')
-        .first(),
-
-      // Total GarryCoin in circulation
-      db('users').sum('balance as total').first(),
-
-      // Recent transaction volume (last 24 hours)
-      db('transactions')
-        .where('created_at', '>=', new Date(Date.now() - 24 * 60 * 60 * 1000))
-        .count('* as count')
-        .first(),
-
-      // Total gambling volume (last 7 days)
-      db('transactions')
-        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-        .whereIn('transaction_type', ['heist_loss', 'rtb_wager', 'wavelength_wager'])
-        .sum('amount as total')
-        .first(),
-
-      // Heist metrics
-      db('transactions')
-        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-        .where('transaction_type', 'like', 'heist_%')
-        .select(
-          db.raw('COUNT(*) as total_games'),
-          db.raw('SUM(CASE WHEN transaction_type = \'heist_win\' THEN 1 ELSE 0 END) as wins'),
-          db.raw('SUM(CASE WHEN transaction_type = \'heist_loss\' THEN amount ELSE 0 END) as volume')
-        )
-        .first(),
-
-      // RTB metrics
-      db('bus_games')
-        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-        .where('status', 'finished')
-        .select(
-          db.raw('COUNT(*) as games'),
-          db.raw('AVG(wager) as avg_wager'),
-          db.raw('SUM(wager) as total_volume')
-        )
-        .first(),
-
-      // Wavelength metrics
-      db('wavelength_games')
-        .where('created_at', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-        .where('status', 'finished')
-        .select(
-          db.raw('COUNT(*) as games'),
-          db.raw('AVG(wager) as avg_wager'),
-          db.raw('SUM(wager) as total_volume')
-        )
-        .first()
-    ]);
-
-    return {
-      userMetrics: {
-        totalUsers: parseInt(totalUsers.count),
-        activeUsers: parseInt(activeUsers.count),
-        activityRate: totalUsers.count > 0 ? (activeUsers.count / totalUsers.count * 100) : 0
-      },
-      economicMetrics: {
-        totalSupply: parseInt(totalBalance.total || 0),
-        recentTransactionVolume: parseInt(recentTransactions.count),
-        weeklyGamblingVolume: parseInt(gamblingVolume.total || 0)
-      },
-      gameMetrics: {
-        heist: {
-          games: parseInt(heistStats.total_games || 0),
-          winRate: heistStats.total_games > 0 ? (heistStats.wins / heistStats.total_games * 100) : 0,
-          volume: parseInt(heistStats.volume || 0)
-        },
-        rtb: {
-          games: parseInt(rtbStats.games || 0),
-          avgWager: parseFloat(rtbStats.avg_wager || 0),
-          volume: parseInt(rtbStats.total_volume || 0)
-        },
-        wavelength: {
-          games: parseInt(wavelengthStats.games || 0),
-          avgWager: parseFloat(wavelengthStats.avg_wager || 0),
-          volume: parseInt(wavelengthStats.total_volume || 0)
-        }
-      }
-    };
-  });
-}
-
 // --- Loan System Functions ---
 
 async function calculateCreditScore(userId) {
@@ -1069,7 +900,9 @@ async function calculateDebtToAssetRatio(userId) {
   });
 }
 
-async function calculateRiskBasedInterestRate(borrowerId, lenderId, amount, fgrBaseRate) {
+const BASE_INTEREST_RATE = 5.0; // percent per day, before risk multipliers
+
+async function calculateRiskBasedInterestRate(borrowerId, lenderId, amount) {
   return withRetry(async () => {
     // Get debt-to-asset ratios for both parties
     const lenderDebtRatio = await calculateDebtToAssetRatio(lenderId);
@@ -1095,7 +928,7 @@ async function calculateRiskBasedInterestRate(borrowerId, lenderId, amount, fgrB
     else creditModifier = 1.2; // +20%
     
     // Calculate final rate
-    let finalRate = (fgrBaseRate * lenderRiskMultiplier * borrowerRiskMultiplier * creditModifier) + sizeAddition;
+    let finalRate = (BASE_INTEREST_RATE * lenderRiskMultiplier * borrowerRiskMultiplier * creditModifier) + sizeAddition;
     
     // Cap between 1% and 200%
     finalRate = Math.max(1, Math.min(200, finalRate));
@@ -1103,7 +936,7 @@ async function calculateRiskBasedInterestRate(borrowerId, lenderId, amount, fgrB
     return {
       rate: finalRate,
       breakdown: {
-        fgrBaseRate,
+        baseRate: BASE_INTEREST_RATE,
         lenderDebtRatio: lenderDebtRatio.toFixed(3),
         borrowerDebtRatio: borrowerDebtRatio.toFixed(3),
         loanSizePercent: loanSizePercent.toFixed(3),
@@ -1190,7 +1023,7 @@ async function getAllActiveLoans() {
   return withRetry(() => db('loans').where({ status: 'active' }));
 }
 
-async function payLoan(loanId, customAmountDue = null, botUserId = null) {
+async function payLoan(loanId, customAmountDue = null) {
   return withRetry(() => db.transaction(async trx => {
     const loan = await trx('loans').where({ id: loanId }).first();
     if (!loan || loan.status !== 'active') {
@@ -1219,36 +1052,27 @@ async function payLoan(loanId, customAmountDue = null, botUserId = null) {
     
     const interestAmount = totalDue - loan.amount;
 
-    // Step 1: Extract payment from borrower 
-    // With FGR bailout system, borrower only pays what they have (if FGR available)
-    // Without FGR, borrower pays full amount even if it pushes them into debt
+    // Step 1: Extract payment from borrower; they may go into debt up to the -1000000 GC ceiling
     let borrowerContribution;
     let wentIntoDebt = false;
 
     if (borrower.balance < totalDue) {
       wentIntoDebt = true;
-      
-      if (botUserId) {
-        // FGR is available - borrower only pays what they have, FGR covers rest
-        borrowerContribution = Math.max(borrower.balance, 0); // Don't let them go below 0
+
+      const newBalance = borrower.balance - totalDue;
+      if (newBalance < -1000000) {
+        // Can only extract what doesn't exceed debt limit
+        borrowerContribution = borrower.balance + 1000000;
+        structuredLog.loan('Loan payment limited by debt ceiling', {
+          loanId,
+          borrowerId: loan.borrower_user_id,
+          requestedPayment: totalDue,
+          borrowerContribution,
+          newBalance: -1000000
+        });
       } else {
-        // No FGR - borrower must pay full amount even if it pushes them into debt
-        // Check debt limit (-1000000 GC)
-        const newBalance = borrower.balance - totalDue;
-        if (newBalance < -1000000) {
-          // Can only extract what doesn't exceed debt limit
-          borrowerContribution = borrower.balance + 1000000;
-          structuredLog.loan('Loan payment limited by debt ceiling', {
-            loanId,
-            borrowerId: loan.borrower_user_id,
-            requestedPayment: totalDue,
-            borrowerContribution,
-            newBalance: -1000000
-          });
-        } else {
-          // Extract full amount, putting borrower into debt
-          borrowerContribution = totalDue;
-        }
+        // Extract full amount, putting borrower into debt
+        borrowerContribution = totalDue;
       }
     } else {
       // Borrower has enough to pay in full
@@ -1270,95 +1094,13 @@ async function payLoan(loanId, customAmountDue = null, botUserId = null) {
       });
     }
 
-    // Step 2: FGR covers any shortfall using transferThenGrant logic
-    const shortfall = totalDue - borrowerContribution;
-    let fgrBailout = false;
-    let bailoutDetails = null;
+    // Step 2: Pay the lender whatever was collected
+    await trx('users')
+      .where({ user_id: loan.lender_user_id })
+      .increment('balance', borrowerContribution);
 
-    if (shortfall > 0 && botUserId) {
-      // FGR steps in to cover the difference - implement transferThenGrant logic inline
-      const bot = await trx('users').where({ user_id: botUserId }).first();
-      if (!bot) {
-        // Create bot user if doesn't exist
-        await trx('users').insert({ user_id: botUserId, balance: 0 });
-      }
-
-      let transferredFromBot = 0;
-      let grantedAmount = 0;
-
-      if (bot && bot.balance >= shortfall) {
-        // Bot has enough to cover shortfall
-        transferredFromBot = shortfall;
-        await trx('users').where({ user_id: botUserId }).decrement('balance', shortfall);
-        await trx('users').where({ user_id: loan.lender_user_id }).increment('balance', shortfall);
-        await trx('transactions').insert({
-          sending_user_id: botUserId,
-          receiving_user_id: loan.lender_user_id,
-          amount: shortfall,
-          transaction_type: 'fgr_loan_bailout'
-        });
-      } else {
-        // Bot doesn't have enough - transfer what it has, grant the rest
-        if (bot && bot.balance > 0) {
-          transferredFromBot = bot.balance;
-          await trx('users').where({ user_id: botUserId }).decrement('balance', bot.balance);
-          await trx('users').where({ user_id: loan.lender_user_id }).increment('balance', bot.balance);
-          await trx('transactions').insert({
-            sending_user_id: botUserId,
-            receiving_user_id: loan.lender_user_id,
-            amount: bot.balance,
-            transaction_type: 'fgr_loan_bailout'
-          });
-        }
-
-        grantedAmount = shortfall - transferredFromBot;
-        if (grantedAmount > 0) {
-          await trx('users').where({ user_id: loan.lender_user_id }).increment('balance', grantedAmount);
-          await trx('transactions').insert({
-            sending_user_id: 'fgr',
-            receiving_user_id: loan.lender_user_id,
-            amount: grantedAmount,
-            transaction_type: 'fgr_loan_bailout'
-          });
-        }
-      }
-
-      fgrBailout = true;
-      bailoutDetails = {
-        shortfall,
-        transferredFromBot,
-        grantedAmount
-      };
-
-      // Also give lender the borrower's contribution
-      if (borrowerContribution > 0) {
-        await trx('users')
-          .where({ user_id: loan.lender_user_id })
-          .increment('balance', borrowerContribution);
-      }
-
-      structuredLog.loan('FGR loan bailout executed', {
-        loanId,
-        borrowerId: loan.borrower_user_id,
-        lenderId: loan.lender_user_id,
-        shortfall,
-        bailoutDetails
-      });
-    } else if (shortfall > 0) {
-      // No bot ID provided, lender doesn't get full payment (defaulted loan)
-      await trx('users')
-        .where({ user_id: loan.lender_user_id })
-        .increment('balance', borrowerContribution);
-    } else {
-      // Borrower paid in full, give lender the full payment
-      await trx('users')
-        .where({ user_id: loan.lender_user_id })
-        .increment('balance', borrowerContribution);
-    }
-
-    // Update loan status - with FGR bailout, loans are always considered "paid"
-    const totalPaymentToLender = borrowerContribution + (bailoutDetails?.shortfall || 0);
-    const loanStatus = totalPaymentToLender >= totalDue ? 'paid' : 'defaulted';
+    // Defaulted when the debt ceiling prevented full collection
+    const loanStatus = borrowerContribution >= totalDue ? 'paid' : 'defaulted';
     
     await trx('loans')
       .where({ id: loanId })
@@ -1373,8 +1115,6 @@ async function payLoan(loanId, customAmountDue = null, botUserId = null) {
       borrowerId: loan.borrower_user_id,
       totalDue,
       borrowerContribution,
-      fgrBailout,
-      bailoutDetails,
       wentIntoDebt,
       status: loanStatus
     });
@@ -1387,9 +1127,7 @@ async function payLoan(loanId, customAmountDue = null, botUserId = null) {
       paid_amount: borrowerContribution,
       total_due: totalDue,
       went_into_debt: wentIntoDebt,
-      status: loanStatus,
-      fgr_bailout: fgrBailout,
-      bailout_details: bailoutDetails
+      status: loanStatus
     };
   }));
 }

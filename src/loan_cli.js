@@ -4,10 +4,7 @@ const {
   createLoan, 
   getUserLoans,
   getAllActiveLoans,
-  payLoan,
-  createFGRPolicy,
-  getFGRPolicy,
-  updateFGRPolicy
+  payLoan
 } = require('./db');
 const { structuredLog } = require('./logger');
 
@@ -29,12 +26,6 @@ async function main() {
       case 'pay-loan':
         await testPayLoan(args[0]);
         break;
-      case 'set-interest-rate':
-        await setInterestRate(args[0]);
-        break;
-      case 'get-interest-rate':
-        await getInterestRate();
-        break;
       case 'test-all':
         await runAllTests();
         break;
@@ -47,14 +38,11 @@ async function main() {
         console.log('  create-loan <borrower> <lender> <amount> <rate> - Create a test loan');
         console.log('  list-active-loans [userId]                - List active loans (all or for user)');
         console.log('  pay-loan <loanId>                         - Manually process loan payment');
-        console.log('  set-interest-rate <rate>                  - Set FGR base interest rate');
-        console.log('  get-interest-rate                         - Get current base interest rate');
         console.log('  test-all                                  - Run comprehensive test suite');
         console.log('');
         console.log('Examples:');
         console.log('  node loan_cli.js credit-score 123456789');
         console.log('  node loan_cli.js create-loan 123456789 garry_bot 100 5.5');
-        console.log('  node loan_cli.js set-interest-rate 4.25');
     }
   } catch (error) {
     console.error('Error:', error.message);
@@ -174,42 +162,6 @@ async function testPayLoan(loanId) {
   }
 }
 
-async function setInterestRate(rate) {
-  if (!rate) {
-    throw new Error('Interest rate is required');
-  }
-
-  const newRate = parseFloat(rate);
-  
-  console.log(`\\n=== SETTING BASE INTEREST RATE TO ${newRate}% ===`);
-  
-  // Check if policy exists
-  const existingPolicy = await getFGRPolicy('base_interest_rate');
-  
-  if (existingPolicy) {
-    await updateFGRPolicy('base_interest_rate', {
-      policy_data: { rate: newRate }
-    });
-    console.log(`✅ Updated existing interest rate policy`);
-  } else {
-    await createFGRPolicy('base_interest_rate', { rate: newRate });
-    console.log(`✅ Created new interest rate policy`);
-  }
-}
-
-async function getInterestRate() {
-  console.log(`\\n=== CURRENT BASE INTEREST RATE ===`);
-  
-  const policy = await getFGRPolicy('base_interest_rate');
-  
-  if (policy) {
-    console.log(`Current Rate: ${policy.policy_data.rate}%`);
-    console.log(`Last Updated: ${policy.updated_at}`);
-  } else {
-    console.log(`No interest rate policy found (default: 5.0%)`);
-  }
-}
-
 async function runAllTests() {
   console.log('\\n🧪 RUNNING COMPREHENSIVE LOAN SYSTEM TESTS\\n');
   
@@ -220,13 +172,8 @@ async function runAllTests() {
     console.log('Test 1: Credit Score Calculation');
     await testCreditScore(testUserId);
     
-    // Test 2: Interest Rate Management
-    console.log('\\n\\nTest 2: Interest Rate Management');
-    await setInterestRate('4.5');
-    await getInterestRate();
-    
-    // Test 3: Loan Creation
-    console.log('\\n\\nTest 3: Bot Loan Creation');
+    // Test 2: Loan Creation
+    console.log('\\n\\nTest 2: Bot Loan Creation');
     await testCreateLoan(testUserId, 'garry_bot', '50', '4.5');
     
     // Test 4: List Active Loans
@@ -257,7 +204,5 @@ module.exports = {
   testCreditScore,
   testCreateLoan,
   listActiveLoans,
-  testPayLoan,
-  setInterestRate,
-  getInterestRate
+  testPayLoan
 };

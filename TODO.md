@@ -7,5 +7,4 @@ Add issues and features to track for developemnt. Use markdown formatting to gro
 # Issues
 
 # Features
-- (20251228) - Remove FGR Events after at least a week of monitoring for bugs
 

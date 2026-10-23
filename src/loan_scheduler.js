@@ -1,9 +1,4 @@
-const { 
-  getAllActiveLoans, 
-  payLoan, 
-  createFGRPolicy, 
-  getFGRPolicy 
-} = require('./db');
+const { getAllActiveLoans, payLoan } = require('./db');
 const { structuredLog } = require('./logger');
 
 class LoanScheduler {
@@ -13,9 +8,6 @@ class LoanScheduler {
   }
 
   async start() {
-    // Initialize base interest rate policy if it doesn't exist
-    await this.initializeInterestRatePolicy();
-
     // Set check interval based on environment
     const environment = process.env.NODE_ENV || 'development';
     const checkInterval = environment === 'development' ? 30 * 1000 : 60 * 60 * 1000; // 30 seconds in dev, 1 hour in prod
@@ -40,20 +32,6 @@ class LoanScheduler {
     }
   }
 
-  async initializeInterestRatePolicy() {
-    try {
-      const existingPolicy = await getFGRPolicy('base_interest_rate');
-      if (!existingPolicy) {
-        await createFGRPolicy('base_interest_rate', { rate: 5.0 });
-        structuredLog.loan('Initialized base interest rate policy', { rate: 5.0 });
-      }
-    } catch (error) {
-      structuredLog.loan('Error initializing interest rate policy', {
-        error: error.message
-      });
-    }
-  }
-
   async processLoanPayments() {
     try {
       const activeLoans = await getAllActiveLoans();
@@ -73,8 +51,6 @@ class LoanScheduler {
 
       for (const loan of dueLoans) {
         try {
-          // For scheduled payments, we don't have access to client.user.id, so pass null
-          // This means scheduled payments won't trigger FGR bailouts - only manual repayments will
           const paymentResult = await payLoan(loan.id);
           paymentResults.push({
             loanId: loan.id,

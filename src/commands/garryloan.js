@@ -4,8 +4,7 @@ const {
   calculateCreditScore,
   calculateRiskBasedInterestRate,
   createLoan,
-  checkDailyLoanLimit,
-  getFGRPolicy
+  checkDailyLoanLimit
 } = require('../db');
 const { structuredLog } = require('../logger');
 const { formatExactGC } = require('../number_formatter');
@@ -61,20 +60,8 @@ module.exports = {
       // Calculate loan terms and validate eligibility
       await findOrCreateUser(userId);
 
-      // Get base interest rate from FGR or default to 5%
-      const getBaseInterestRate = async () => {
-        try {
-          const policy = await getFGRPolicy('base_interest_rate');
-          return policy ? parseFloat(policy.policy_data.rate || 5.0) : 5.0;
-        } catch (error) {
-          return 5.0;
-        }
-      };
-
-      const baseInterestRate = await getBaseInterestRate();
-
       // Calculate risk-based interest rate
-      const rateResult = await calculateRiskBasedInterestRate(userId, lenderId, amount, baseInterestRate);
+      const rateResult = await calculateRiskBasedInterestRate(userId, lenderId, amount);
       const adjustedInterestRate = rateResult.rate;
       const creditScore = rateResult.breakdown.creditScore;
 
@@ -132,7 +119,7 @@ module.exports = {
         `**Repayment Period:** ${repaymentPeriod}\n\n` +
         `💳 **Your Credit Score:** ${creditScore}\n` +
         `📊 **Risk Factors:**\n` +
-        `• FGR Base Rate: ${rateResult.breakdown.fgrBaseRate.toFixed(2)}%\n` +
+        `• Base Rate: ${rateResult.breakdown.baseRate.toFixed(2)}%\n` +
         `• Your Debt Ratio: ${(parseFloat(rateResult.breakdown.borrowerDebtRatio) * 100).toFixed(1)}%\n` +
         `• Lender Debt Ratio: ${(parseFloat(rateResult.breakdown.lenderDebtRatio) * 100).toFixed(1)}%\n` +
         `• Loan Size: ${(parseFloat(rateResult.breakdown.loanSizePercent) * 100).toFixed(1)}% of lender balance\n\n` +
