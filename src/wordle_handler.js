@@ -1,4 +1,4 @@
-const { processWordleTransaction, getUser } = require('./db');
+const { processWordleTransaction, getUser, findOrCreateUser } = require('./db');
 const { structuredLog } = require('./logger');
 const { formatExactGC } = require('./number_formatter');
 
@@ -13,6 +13,9 @@ const REWARD_STRUCTURE_PERCENT = {
 const CHEAT_PENALTY_PERCENT = 4;
 const CHEAT_CHANCE = 0.2;
 
+const MAX_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 1000;
+
 const CHEATER_EMOJIS = ['<:scumbagcharles:707302898869993523>', '🚔', '🚨', '👮', '⚖️', '<:urfuckendeadkiddo:706647683183411362>', '<:buaGarry:705932743158005771>', '<:megacoop:707305419348901919>', '🙅‍♂️'];
 const WINNER_EMOJIS = ['<:garryhulkhands:712745242272464966>', '<:hellya:707655186423742514>', '🎊', '✨', '🏆', '👑', '<:HereForTheWholeFoodsPizza:712742427001356370>', '<:WhenSheTastesLikeGolf:707671469328564235>', '<:supgirl:706640451524100148>', '<:pewpew:707669761969881172>', '☑️', '😎', '✨', '🎰'];
 const UNSOLVED_EMOJIS = ['<:whengarrymissesthecannonminion:707799305892790412>', '<:jacobmid:707672458127474710>', '<:slowgarry:707668416281968700>', '😿', '<:oopskips:707287012054663231>', '<:killme:707447664748527627>', '🇫', '🦽', '🚑', '🤡'];
@@ -21,105 +24,142 @@ function getRandomEmoji(emojiList) {
     return emojiList[Math.floor(Math.random() * emojiList.length)];
 }
 
-async function handleWordleMessage(message) {
-    structuredLog.wordle('Processing potential Wordle message');
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-    // 1. Check if today's Wordle has already been processed for any user mentioned.
-    const mentionedUserIds = [...message.mentions.users.keys()];
-    if (mentionedUserIds.length === 0) {
+/**
+ * Pay (or fine) one user for one Wordle message. Safe to retry: the database
+ * records (user, source message) once, so a repeat never pays twice.
+ * Returns an outcome object, or { duplicate: true } if already processed.
+ */
+async function processUserResult(userId, tries, sourceMessageId) {
+    const isCheater = Math.random() < CHEAT_CHANCE;
+
+    await findOrCreateUser(userId);
+    const user = await getUser(userId);
+    const actualBalance = user?.balance || 0;
+    // Always treat users as having minimum 10 GC for Wordle calculations
+    const calculationBalance = Math.max(actualBalance, 10);
+
+    let finalAmount;
+    let transactionType;
+    let finalTries = tries;
+    let kind;
+
+    if (isCheater) {
+        // 4% penalty of calculation balance (minimum 10), rounded up
+        finalAmount = -Math.ceil(calculationBalance * (CHEAT_PENALTY_PERCENT / 100));
+        transactionType = 'wordle_cheat_fine';
+        kind = 'cheater';
+    } else if (tries) { // Solved
+        // Percentage of calculation balance (minimum 10) reward, rounded up
+        finalAmount = Math.ceil(calculationBalance * ((REWARD_STRUCTURE_PERCENT[tries] || 0) / 100));
+        transactionType = 'wordle_reward';
+        kind = 'winner';
+    } else { // Unsolved (X/6)
+        finalAmount = 0;
+        finalTries = 10; // Set tries to 10 for unsolved
+        transactionType = 'wordle_unsolved';
+        kind = 'unsolved';
+    }
+
+    const { applied } = await processWordleTransaction(userId, finalTries, finalAmount, isCheater, transactionType, sourceMessageId);
+    if (!applied) {
+        return { duplicate: true };
+    }
+
+    structuredLog.wordle('Transaction recorded', {
+        userId,
+        kind,
+        tries,
+        actualBalance,
+        calculationBalance,
+        amount: finalAmount,
+        transactionType,
+        sourceMessageId
+    });
+    return { kind, userId, tries, amount: finalAmount };
+}
+
+async function processUserWithRetry(userId, tries, sourceMessageId) {
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            return await processUserResult(userId, tries, sourceMessageId);
+        } catch (error) {
+            lastError = error;
+            structuredLog.error('Wordle payout attempt failed', {
+                userId,
+                sourceMessageId,
+                attempt,
+                maxAttempts: MAX_ATTEMPTS,
+                error: error.message,
+                category: 'wordle'
+            });
+            if (attempt < MAX_ATTEMPTS) {
+                await sleep(RETRY_BACKOFF_MS * attempt);
+            }
+        }
+    }
+    throw lastError;
+}
+
+async function handleWordleMessage(message) {
+    structuredLog.wordle('Processing potential Wordle message', { sourceMessageId: message.id });
+
+    if (message.mentions.users.size === 0) {
         structuredLog.wordle('No mentioned users found, skipping');
         return;
     }
 
-    structuredLog.wordle('Processing new results for today', { date: today });
-    // 2. Parse the message to get user scores
+    // Parse the message to get user scores
     const results = parseWordleResults(message.content, message.mentions.users);
     if (Object.keys(results).length === 0) {
         structuredLog.wordle('Could not parse any user scores from message');
         return;
     }
     structuredLog.wordle('Parsed user results', {
-        userCount: Object.keys(results).length
+        userCount: Object.keys(results).length,
+        sourceMessageId: message.id
     });
 
-    // 3. Process each user's result and group them
+    // Process each user independently: one failure must never skip the rest or the report.
     const winnersByTries = {};
     const unsolved = [];
     const cheaters = [];
+    const failed = [];
 
     for (const userId in results) {
         const { tries } = results[userId];
-        const isCheater = Math.random() < CHEAT_CHANCE;
-
-        // Get user's current balance for percentage calculation
-        const user = await getUser(userId);
-        const actualBalance = user?.balance || 0;
-        // Always treat users as having minimum 10 GC for Wordle calculations
-        const calculationBalance = Math.max(actualBalance, 10);
-
-        let finalAmount = 0;
-        let transactionType = '';
-        let finalTries = tries;
-
-        if (isCheater) {
-            // 4% penalty of calculation balance (minimum 10), rounded up
-            const penaltyPercent = CHEAT_PENALTY_PERCENT / 100;
-            finalAmount = -Math.ceil(calculationBalance * penaltyPercent);
-            transactionType = 'wordle_cheat_fine';
-            cheaters.push({ userId, amount: Math.abs(finalAmount) });
-            structuredLog.wordle('User flagged as cheater', {
-                userId,
-                actualBalance,
-                calculationBalance,
-                penaltyPercent: CHEAT_PENALTY_PERCENT,
-                penalty: Math.abs(finalAmount)
-            });
-        } else if (tries) { // Solved
-            // Percentage of calculation balance (minimum 10) reward, rounded up
-            const rewardPercent = (REWARD_STRUCTURE_PERCENT[tries] || 0) / 100;
-            finalAmount = Math.ceil(calculationBalance * rewardPercent);
-            transactionType = 'wordle_reward';
-            if (!winnersByTries[tries]) {
-                winnersByTries[tries] = [];
+        try {
+            const outcome = await processUserWithRetry(userId, tries, message.id);
+            if (outcome.duplicate) {
+                structuredLog.wordle('Already processed for this message, skipping', { userId, sourceMessageId: message.id });
+            } else if (outcome.kind === 'cheater') {
+                cheaters.push({ userId, amount: Math.abs(outcome.amount) });
+            } else if (outcome.kind === 'winner') {
+                (winnersByTries[tries] = winnersByTries[tries] || []).push({ userId, amount: outcome.amount });
+            } else {
+                unsolved.push(userId);
             }
-            winnersByTries[tries].push({ userId, amount: finalAmount });
-            structuredLog.wordle('User solved Wordle', {
+        } catch (error) {
+            failed.push(userId);
+            structuredLog.error('Wordle payout failed after all attempts', {
                 userId,
                 tries,
-                actualBalance,
-                calculationBalance,
-                rewardPercent: REWARD_STRUCTURE_PERCENT[tries],
-                reward: finalAmount
-            });
-        } else { // Unsolved (X/6)
-            finalAmount = 0;
-            finalTries = 10; // Set tries to 10 for unsolved
-            transactionType = 'wordle_unsolved';
-            unsolved.push(userId);
-            structuredLog.wordle('User did not solve Wordle', {
-                userId,
-                actualBalance,
-                calculationBalance
+                sourceMessageId: message.id,
+                error: error.message,
+                category: 'wordle'
             });
         }
-
-        // Always record the event in the database
-        await processWordleTransaction(userId, finalTries, finalAmount, isCheater, transactionType);
-        structuredLog.wordle('Transaction recorded', {
-            userId,
-            amount: finalAmount,
-            transactionType
-        });
     }
 
-    // 4. Construct the public report
+    // Construct the public report
     const reportLines = [];
     // Batch winners by score
     for (const tries in winnersByTries) {
         const winners = winnersByTries[tries];
         const rewardPercent = REWARD_STRUCTURE_PERCENT[tries];
-        
+
         if (winners.length === 1) {
             const winner = winners[0];
             reportLines.push(`<@${winner.userId}> ${getRandomEmoji(WINNER_EMOJIS)} solved the Wordle in ${tries} tries for ${formatExactGC(winner.amount)} GC (${rewardPercent}% of balance)`);
@@ -147,7 +187,13 @@ async function handleWordleMessage(message) {
         }
     }
 
-    // 5. Send the public report
+    // Users we could not pay are named, never silently dropped
+    if (failed.length > 0) {
+        const failedMentions = failed.map(id => `<@${id}>`).join(', ');
+        reportLines.push(`⚠️ ${failedMentions} - the GarryCoin vault jammed and I could not process your Wordle result. Nothing was paid or taken; it is logged for manual settlement.`);
+    }
+
+    // Send the public report
     if (reportLines.length > 0) {
         await message.channel.send(reportLines.join('\n'));
     }
@@ -189,4 +235,4 @@ function parseWordleResults(content, mentions) {
 }
 
 
-module.exports = { handleWordleMessage };
+module.exports = { handleWordleMessage, parseWordleResults };

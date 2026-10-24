@@ -14,6 +14,7 @@ function getTransactionReason(transactionType) {
     // System types
     'lottery_grant': 'lottery winnings 🎲',
     'wordle_reward': 'wordle puzzle reward 🧩',
+    'wordle_backpay': 'wordle back pay (vault jam bailout) 🚂💰',
     'rain_distribution': 'rain shower 🌧️',
     'house_grant': 'house generosity 🏛️💝',
     'loan_disbursement': 'loan disbursement 🏦',
