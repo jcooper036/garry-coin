@@ -196,6 +196,11 @@ Removed the FGR entirely (feature unused):
 - **Loans**: base rate is now the constant `BASE_INTEREST_RATE = 5.0` in `src/db.js`; `payLoan` no longer takes `botUserId`, and the FGR bailout is gone: borrowers pay in full (down to the -1,000,000 GC debt ceiling), lender is paid only what was collected, shortfall => `defaulted`. Old `fgr_loan_bailout` transactions still render in `/garryhistory`/`/garryreceipt`.
 - **Removed CLI**: `loan_cli.js set-interest-rate` / `get-interest-rate`
 
+### 2026-10-23: Wordle Missed Rewards Audit & Fix
+- **Finding**: audit (`src/wordle_audit.js`, Discord history + prod `wordle_rewards`) showed since 2025-09-07 every missed day was a mid-loop exception: first N users paid, trailing 1-2 unpaid, no report (report was sent only after the loop). Before that, whole-day failures during dev churn.
+- **Fix**: `src/wordle_handler.js` pays each user independently (3 attempts, backoff), always posts a report naming users it could not process; `processWordleTransaction` is idempotent per `(user_id, source_message_id)` (migration `20261023010000`), so `messageUpdate` replays and retries never double pay.
+- **Lesson**: `.env` has the prod Supabase string (`SUPABASE_SESSION_POOLER`, already ends in `/postgres`); `DATABASE_URL` is local. Check all env keys before saying prod access is missing. Use `.worktrees/<name>/` prefixes in edit/read paths; bare `src/...` paths hit trunk.
+
 
 ## Dev Topics
 

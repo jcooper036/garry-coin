@@ -772,10 +772,32 @@ async function cancelWavelengthGame(gameId) {
 
 // --- Wordle Functions ---
 
-async function processWordleTransaction(userId, tries, amount, isCheater, transactionType) {
+/**
+ * Apply one Wordle result for one user, at most once per (user, Wordle message).
+ * Returns { applied: false } if this message was already processed for the user.
+ */
+async function processWordleTransaction(userId, tries, amount, isCheater, transactionType, sourceMessageId) {
   const today = new Date().toISOString().slice(0, 10);
 
   return withRetry(() => db.transaction(async trx => {
+    // Claim (user, message) first; the unique index makes concurrent/repeat processing a no-op
+    const claimed = await trx('wordle_rewards')
+      .insert({
+        user_id: userId,
+        reward_date: today,
+        tries: tries,
+        reward_amount: amount,
+        was_caught_cheating: isCheater,
+        source_message_id: sourceMessageId,
+      })
+      .onConflict(['user_id', 'source_message_id'])
+      .ignore()
+      .returning('id');
+
+    if (claimed.length === 0) {
+      return { applied: false };
+    }
+
     // Update user balance
     if (amount > 0) {
       await trx('users').where({ user_id: userId }).increment('balance', amount);
@@ -791,14 +813,7 @@ async function processWordleTransaction(userId, tries, amount, isCheater, transa
       transaction_type: transactionType,
     });
 
-    // Record in wordle_rewards table
-    await trx('wordle_rewards').insert({
-      user_id: userId,
-      reward_date: today,
-      tries: tries,
-      reward_amount: amount,
-      was_caught_cheating: isCheater,
-    });
+    return { applied: true };
   }));
 }
 

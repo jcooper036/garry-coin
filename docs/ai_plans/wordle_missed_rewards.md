@@ -1,6 +1,6 @@
 # AI's Plan: Wordle missed rewards (fix + tally)
 
-Status: DRAFT, awaiting user plan for synthesis. No prod data was available when this was written (local `.env` DB is `localhost`, Docker not running), so root causes below are code-derived hypotheses, not confirmed.
+Status: IMPLEMENTED (fix). Original hypotheses below were code-derived; see "Prod cross-check" at the end for what the data showed.
 
 ## What the code does today (`src/bot.js`, `src/wordle_handler.js`, `db.processWordleTransaction`)
 1. `messageCreate` and `messageUpdate` both call `processWordleMessage`.
@@ -50,3 +50,9 @@ Method: a user listed in a Wordle-bot results message is "missed" if no GarryCoi
 - Ruled out at the Discord-visible level: H4 (no near-miss formats), H6 for mapped users (parser dropped nobody), H5 (Wordle bot never edited a message), partial-loop failures that still reply.
 - Still open: H3 (bot down / missed gateway event) vs H1/H2 (exception or DB failure aborting before the report). A throw after some users were paid would show here as a "miss" even though rewards were paid, so the tally is an upper bound until checked against `wordle_rewards`.
 - Time of day does not separate missed from hit days (both cluster 10-14 UTC).
+
+## Prod cross-check (`wordle_rewards`, read-only) and implemented fix
+- Of 298 Discord-visible missed player-days: 144 were paid but got no report, 154 were never paid (126 before 2025-09-07, 28 since).
+- Every missed day since 2025-09-07 has the same shape: a prefix of users paid, the trailing 1-2 unpaid, no report. That is an exception partway through the payout loop (H1); the report is only sent after the loop.
+- Implemented: per-user isolation with 3 attempts and backoff, `findOrCreateUser` before paying, report always sent and names users it could not process, and idempotency per `(user_id, source_message_id)` via migration `20261023010000_add_source_message_id_to_wordle_rewards.js` (claim row first, `ON CONFLICT DO NOTHING`).
+- Not implemented: startup catch-up from channel history, a persisted misses table (the audit script is the tally), retroactive payout.
