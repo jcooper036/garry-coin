@@ -189,4 +189,4 @@ function parseWordleResults(content, mentions) {
 }
 
 
-module.exports = { handleWordleMessage };
+module.exports = { handleWordleMessage, parseWordleResults };
