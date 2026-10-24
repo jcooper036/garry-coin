@@ -200,6 +200,7 @@ Removed the FGR entirely (feature unused):
 - **Finding**: audit (`src/wordle_audit.js`, Discord history + prod `wordle_rewards`) showed since 2025-09-07 every missed day was a mid-loop exception: first N users paid, trailing 1-2 unpaid, no report (report was sent only after the loop). Before that, whole-day failures during dev churn.
 - **Fix**: `src/wordle_handler.js` pays each user independently (3 attempts, backoff), always posts a report naming users it could not process; `processWordleTransaction` is idempotent per `(user_id, source_message_id)` (migration `20261023010000`), so `messageUpdate` replays and retries never double pay.
 - **Lesson**: `.env` has the prod Supabase string (`SUPABASE_SESSION_POOLER`, already ends in `/postgres`); `DATABASE_URL` is local. Check all env keys before saying prod access is missing. Use `.worktrees/<name>/` prefixes in edit/read paths; bare `src/...` paths hit trunk.
+- **Backpay (executed against prod, one transaction)**: 12 players received one-time grants as a % of current balance (10-30%, GeneralGiad 420%), recorded as `wordle_backpay` transactions from `house`; 338,623,817,859,644 GC minted, 220T of it to AlexCharles. Announced in `#wordle-gonna-make-me-goin` in the voice of a railroad baron. Amounts were chosen by the user, not derived from days owed. Script was throwaway (`/tmp`), guarded against re-running by checking for existing `wordle_backpay` rows.
 
 
 ## Dev Topics
